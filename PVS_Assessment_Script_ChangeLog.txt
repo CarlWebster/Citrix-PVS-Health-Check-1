@@ -4,6 +4,10 @@
 #@carlwebster on Twitter
 #http://www.CarlWebster.com
 
+#Version 1.14 7-Apr-2018
+#	Added Operating System information to Functions GetComputerWMIInfo and OutputComputerItem
+#	Code cleanup from Visual Studio Code
+
 #Version 1.13 29-Mar-2017
 #	Added Appendix L for vDisks configured to Cache on Server
 
