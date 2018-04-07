@@ -148,6 +148,10 @@ Param(
 #script created August 8, 2015
 #released to the community on February 2, 2016
 #
+#Version 1.14 7-Apr-2018
+#	Added Operating System information to Functions GetComputerWMIInfo and OutputComputerItem
+#	Code cleanup from Visual Studio Code
+#
 #Version 1.13 29-Mar-2017
 #	Added Appendix L for vDisks configured to Cache on Server
 #
@@ -208,88 +212,6 @@ Param(
 
 Set-StrictMode -Version 2
 
-If(!(Test-Path Variable:AdminAddress))
-{
-	$AdminAddress = ""
-}
-If(!(Test-Path Variable:User))
-{
-	$User = ""
-}
-If(!(Test-Path Variable:Domain))
-{
-	$Domain = ""
-}
-If(!(Test-Path Variable:Password))
-{
-	$Password = ""
-}
-If(!(Test-Path Variable:Folder))
-{
-	$Folder = ""
-}
-If(!(Test-Path Variable:SmtpServer))
-{
-	$SmtpServer = ""
-}
-If(!(Test-Path Variable:SmtpPort))
-{
-	$SmtpPort = 25
-}
-If(!(Test-Path Variable:UseSSL))
-{
-	$UseSSL = $False
-}
-If(!(Test-Path Variable:From))
-{
-	$From = ""
-}
-If(!(Test-Path Variable:To))
-{
-	$To = ""
-}
-
-If($Null -eq $AdminAddress)
-{
-	$AdminAddress = ""
-}
-If($Null -eq $User)
-{
-	$User = ""
-}
-If($Null -eq $Domain)
-{
-	$Domain = ""
-}
-If($Null -eq $Password)
-{
-	$Password = ""
-}
-If($Null -eq $Folder)
-{
-	$Folder = ""
-}
-If($Null -eq $SmtpServer)
-{
-	$SmtpServer = ""
-}
-If($Null -eq $SmtpPort)
-{
-	$SmtpPort = 25
-}
-If($Null -eq $UseSSL)
-{
-	$UseSSL = $False
-}
-If($Null -eq $From)
-{
-	$From = ""
-}
-If($Null -eq $To)
-{
-	$To = ""
-}
-
 If($Folder -ne "")
 {
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Testing folder path"
@@ -342,11 +264,17 @@ Function GetComputerWMIInfo
 	# @kbaggerman on Twitter
 	# http://blog.myvirtualvision.com
 	# modified 1-May-2014 to work in trusted AD Forests and using different domain admin credentials	
+	# modified 17-Aug-2016 to fix a few issues with Text and HTML output
+	# modified 2-Apr-2018 to add ComputerOS information
 
 	#Get Computer info
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing WMI Computer information"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Hardware information"
-	Line 2 "General Computer"
+	Write-Verbose "$(Get-Date): `t`tProcessing WMI Computer information"
+	Write-Verbose "$(Get-Date): `t`t`tHardware information"
+	If($Text)
+	{
+		Line 0 "Computer Information: $($RemoteComputerName)"
+		Line 1 "General Computer"
+	}
 	
 	[bool]$GotComputerItems = $True
 	
@@ -362,36 +290,46 @@ Function GetComputerWMIInfo
 	
 	If($? -and $Null -ne $Results)
 	{
-		$ComputerItems = $Results | Select Manufacturer, Model, Domain, `
+		$ComputerItems = $Results | Select-Object Manufacturer, Model, Domain, `
 		@{N="TotalPhysicalRam"; E={[math]::round(($_.TotalPhysicalMemory / 1GB),0)}}, `
 		NumberOfProcessors, NumberOfLogicalProcessors
 		$Results = $Null
+		[string]$ComputerOS = (Get-WmiObject -class Win32_OperatingSystem -computername $RemoteComputerName -EA 0).Caption
 
 		ForEach($Item in $ComputerItems)
 		{
-			OutputComputerItem $Item
+			OutputComputerItem $Item $ComputerOS
 		}
 	}
 	ElseIf(!$?)
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
+		Write-Verbose "$(Get-Date): Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
 		Write-Warning "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
-		Line 3 "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
-		Line 3 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-		Line 3 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-		Line 3 "need to rerun the script with Domain Admin credentials from the trusted Forest."
-		Line 3 ""
+		If($Text)
+		{
+			Line 2 "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
+			Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
+			Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
+			Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+			Line 2 ""
+		}
 	}
 	Else
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): No results Returned for Computer information"
-		Line 3 "No results Returned for Computer information"
+		Write-Verbose "$(Get-Date): No results Returned for Computer information"
+		If($Text)
+		{
+			Line 2 "No results Returned for Computer information"
+		}
 	}
 	
 	#Get Disk info
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Drive information"
+	Write-Verbose "$(Get-Date): `t`t`tDrive information"
 
-	Line 2 "Drive(s)"
+	If($Text)
+	{
+		Line 1 "Drive(s)"
+	}
 
 	[bool]$GotDrives = $True
 	
@@ -407,13 +345,13 @@ Function GetComputerWMIInfo
 
 	If($? -and $Null -ne $Results)
 	{
-		$drives = $Results | Select caption, @{N="drivesize"; E={[math]::round(($_.size / 1GB),0)}}, 
+		$drives = $Results | Select-Object caption, @{N="drivesize"; E={[math]::round(($_.size / 1GB),0)}}, 
 		filesystem, @{N="drivefreespace"; E={[math]::round(($_.freespace / 1GB),0)}}, 
 		volumename, drivetype, volumedirty, volumeserialnumber
 		$Results = $Null
 		ForEach($drive in $drives)
 		{
-			If($drive.caption -ne "A:" -and $drive.caption -ne "B:" -and $drive.drivetype -ne 5)
+			If($drive.caption -ne "A:" -and $drive.caption -ne "B:")
 			{
 				OutputDriveItem $drive
 			}
@@ -421,24 +359,33 @@ Function GetComputerWMIInfo
 	}
 	ElseIf(!$?)
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
+		Write-Verbose "$(Get-Date): Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
 		Write-Warning "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
-		Line 3 "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
-		Line 3 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-		Line 3 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-		Line 3 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+		If($Text)
+		{
+			Line 2 "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
+			Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
+			Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
+			Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+		}
 	}
 	Else
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): No results Returned for Drive information"
-		Line 3 "No results Returned for Drive information"
+		Write-Verbose "$(Get-Date): No results Returned for Drive information"
+		If($Text)
+		{
+			Line 2 "No results Returned for Drive information"
+		}
 	}
 	
 
 	#Get CPU's and stepping
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processor information"
+	Write-Verbose "$(Get-Date): `t`t`tProcessor information"
 
-	Line 2 "Processor(s)"
+	If($Text)
+	{
+		Line 1 "Processor(s)"
+	}
 
 	[bool]$GotProcessors = $True
 	
@@ -454,7 +401,7 @@ Function GetComputerWMIInfo
 
 	If($? -and $Null -ne $Results)
 	{
-		$Processors = $Results | Select availability, name, description, maxclockspeed, 
+		$Processors = $Results | Select-Object availability, name, description, maxclockspeed, 
 		l2cachesize, l3cachesize, numberofcores, numberoflogicalprocessors
 		$Results = $Null
 		ForEach($processor in $processors)
@@ -464,23 +411,32 @@ Function GetComputerWMIInfo
 	}
 	ElseIf(!$?)
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
+		Write-Verbose "$(Get-Date): Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
 		Write-Warning "Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
-		Line 3 "Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
-		Line 3 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-		Line 3 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-		Line 3 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+		If($Text)
+		{
+			Line 2 "Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
+			Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
+			Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
+			Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+		}
 	}
 	Else
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): No results Returned for Processor information"
-		Line 3 "No results Returned for Processor information"
+		Write-Verbose "$(Get-Date): No results Returned for Processor information"
+		If($Text)
+		{
+			Line 2 "No results Returned for Processor information"
+		}
 	}
 
 	#Get Nics
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): NIC information"
+	Write-Verbose "$(Get-Date): `t`t`tNIC information"
 
-	Line 2 "Network Interface(s)"
+	If($Text)
+	{
+		Line 1 "Network Interface(s)"
+	}
 
 	[bool]$GotNics = $True
 	
@@ -491,28 +447,21 @@ Function GetComputerWMIInfo
 	
 	Catch
 	{
-		$Results
+		$Results = $Null
 	}
 
 	If($? -and $Null -ne $Results)
 	{
-		$Nics = $Results | Where {$Null -ne $_.ipaddress}
+		$Nics = $Results | Where-Object {$Null -ne $_.ipaddress}
 		$Results = $Null
 
-		If($Null -eq $Nics) 
+		If($Nics -eq $Null ) 
 		{ 
 			$GotNics = $False 
 		} 
 		Else 
-		{
-			If($Nics -is [array])
-			{
-				$GotNics = !($Nics[0].__PROPERTY_COUNT -eq 0) 
-			}
-			Else
-			{
-				$GotNics = !($Nics.__PROPERTY_COUNT -eq 0) 
-			}
+		{ 
+			$GotNics = !($Nics.__PROPERTY_COUNT -eq 0) 
 		} 
 	
 		If($GotNics)
@@ -521,7 +470,7 @@ Function GetComputerWMIInfo
 			{
 				Try
 				{
-					$ThisNic = Get-WmiObject -computername $RemoteComputerName win32_networkadapter | Where {$_.index -eq $nic.index}
+					$ThisNic = Get-WmiObject -computername $RemoteComputerName win32_networkadapter | Where-Object {$_.index -eq $nic.index}
 				}
 				
 				Catch 
@@ -531,23 +480,29 @@ Function GetComputerWMIInfo
 				
 				If($? -and $Null -ne $ThisNic)
 				{
-					OutputNicItem $Nic $ThisNic $RemoteComputerName
+					OutputNicItem $Nic $ThisNic
 				}
 				ElseIf(!$?)
 				{
 					Write-Warning "$(Get-Date): Error retrieving NIC information"
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+					Write-Verbose "$(Get-Date): Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
 					Write-Warning "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-					Line 3 "Error retrieving NIC information"
-					Line 3 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-					Line 3 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-					Line 3 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-					Line 3 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+					If($Text)
+					{
+						Line 2 "Error retrieving NIC information"
+						Line 2 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+						Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
+						Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
+						Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+					}
 				}
 				Else
 				{
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): No results Returned for NIC information"
-					Line 3 "No results Returned for NIC information"
+					Write-Verbose "$(Get-Date): No results Returned for NIC information"
+					If($Text)
+					{
+						Line 2 "No results Returned for NIC information"
+					}
 				}
 			}
 		}	
@@ -555,39 +510,48 @@ Function GetComputerWMIInfo
 	ElseIf(!$?)
 	{
 		Write-Warning "$(Get-Date): Error retrieving NIC configuration information"
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+		Write-Verbose "$(Get-Date): Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
 		Write-Warning "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-		Line 3 "Error retrieving NIC configuration information"
-		Line 3 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-		Line 3 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-		Line 3 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-		Line 3 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+		If($Text)
+		{
+			Line 2 "Error retrieving NIC configuration information"
+			Line 2 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+			Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
+			Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
+			Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+		}
 	}
 	Else
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): No results Returned for NIC configuration information"
-		Line 3 "No results Returned for NIC configuration information"
+		Write-Verbose "$(Get-Date): No results Returned for NIC configuration information"
+		If($Text)
+		{
+			Line 2 "No results Returned for NIC configuration information"
+		}
 	}
 	
-	Line 1 ""
-
-	$Results = $Null
-	$ComputerItems = $Null
-	$Drives = $Null
-	$Processors = $Null
-	$Nics = $Null
+	If($Text)
+	{
+		Line 0 ""
+	}
 }
 
 Function OutputComputerItem
 {
-	Param([object]$Item)
-	Line 3 "Manufacturer: " $Item.manufacturer
-	Line 3 "Model: " $Item.model
-	Line 3 "Domain: " $Item.domain
-	Line 3 "Total Ram: $($Item.totalphysicalram) GB"
-	Line 3 "Physical Processors (sockets): " $Item.NumberOfProcessors
-	Line 3 "Logical Processors (cores w/HT): " $Item.NumberOfLogicalProcessors
-	Line 3 ""
+	Param([object]$Item, [string]$OS)
+	# modified 2-Apr-2018 to add Operating System information
+	
+	If($Text)
+	{
+		Line 2 "Manufacturer`t`t`t: " $Item.manufacturer
+		Line 2 "Model`t`t`t`t: " $Item.model
+		Line 2 "Domain`t`t`t`t: " $Item.domain
+		Line 2 "Operating System`t`t: " $OS
+		Line 2 "Total Ram`t`t`t: $($Item.totalphysicalram) GB"
+		Line 2 "Physical Processors (sockets)`t: " $Item.NumberOfProcessors
+		Line 2 "Logical Processors (cores w/HT)`t: " $Item.NumberOfLogicalProcessors
+		Line 2 ""
+	}
 }
 
 Function OutputDriveItem
@@ -697,7 +661,7 @@ Function OutputNicItem
 {
 	Param([object]$Nic, [object]$ThisNic, [string] $ComputerName)
 	
-	$powerMgmt = Get-WmiObject MSPower_DeviceEnable -Namespace root\wmi | where {$_.InstanceName -match [regex]::Escape($ThisNic.PNPDeviceID)}
+	$powerMgmt = Get-WmiObject MSPower_DeviceEnable -Namespace root\wmi | Where-Object {$_.InstanceName -match [regex]::Escape($ThisNic.PNPDeviceID)}
 
 	If($? -and $Null -ne $powerMgmt)
 	{
@@ -985,7 +949,7 @@ Function GetConfigWizardInfo
 	$PXEServiceValue = Get-RegistryValue "HKLM:\SOFTWARE\Citrix\ProvisioningServices\Wizard" "PXEType" $ComputerName
 	
 	$DHCPServices = ""
-	$PXEService = ""
+	$PXEServices = ""
 
 	Switch ($DHCPServicesValue)
 	{
@@ -1356,8 +1320,8 @@ Function Check-NeededPSSnapins
 	$RegisteredSnapins = @()
 
 	#Creates arrays of strings, rather than objects, we're passing strings so this will be more robust.
-	$loadedSnapins += get-pssnapin | % {$_.name}
-	$registeredSnapins += get-pssnapin -Registered | % {$_.name}
+	$loadedSnapins += get-pssnapin | ForEach-Object {$_.name}
+	$registeredSnapins += get-pssnapin -Registered | ForEach-Object {$_.name}
 
 	ForEach($Snapin in $Snapins)
 	{
@@ -1387,7 +1351,7 @@ Function Check-NeededPSSnapins
 	If($FoundMissingSnapin)
 	{
 		Write-Warning "Missing Windows PowerShell snap-ins Detected:"
-		$missingSnapins | % {Write-Warning "($_)"}
+		$missingSnapins | ForEach-Object {Write-Warning "($_)"}
 		return $False
 	}
 	Else
@@ -2419,7 +2383,7 @@ Function GetPVSServiceInfo
 	Param([string]$ComputerName)
 
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing PVS Services for Server $($server.servername)"
-	$Services = Get-WmiObject -ComputerName $ComputerName Win32_Service -EA 0 | Where-Object {$_.DisplayName -like "Citrix PVS*"} | Select displayname, name, status, startmode, started, startname, state 
+	$Services = Get-WmiObject -ComputerName $ComputerName Win32_Service -EA 0 | Where-Object {$_.DisplayName -like "Citrix PVS*"} | Select-Object displayname, name, status, startmode, started, startname, state 
 	
 	If($? -and $Null -ne $Services)
 	{
@@ -2479,7 +2443,7 @@ Function GetBadStreamingIPAddresses
 
 	#loop through the configured streaming ip address and compare to the physical configured ip addresses
 	#if a streaming ip address is not in the list of physical ip addresses, it is a bad streaming ip address
-	ForEach ($Stream in ($Script:StreamingIPAddresses | Where {$_.Servername -eq $ComputerName})) {
+	ForEach ($Stream in ($Script:StreamingIPAddresses | Where-Object {$_.Servername -eq $ComputerName})) {
 		$exists = $false
 		:outerLoop ForEach ($ServerNIC in $Script:NICIPAddresses.Item($ComputerName)) 
 		{
@@ -2793,7 +2757,6 @@ Function ProcessvDisksinFarm
 				#get versions info
 				#thanks to the PVS Product team for their help in understanding the Versions information
 				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing vDisk Versions"
-				$VersionsObjects = @()
 				$error.Clear()
 				$MCLIGetResult = Mcli-Get DiskVersion -p diskLocatorName="$($Disk.diskLocatorName)",storeName="$($disk.storeName)",siteName="$($disk.siteName)"
 				If($error.Count -eq 0)
@@ -3070,7 +3033,7 @@ Function ProcessStores
 					$GetParam = "serverName = $Temp"
 					$ErrorTxt = "Server Store information"
 					$ServerStore = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-                    $Providers = $ServerStore | Where {$_.StoreName -eq $Store.Storename}
+                    $Providers = $ServerStore | Where-Object {$_.StoreName -eq $Store.Storename}
                     If($Providers)
 					{
                        ForEach ($Provider in $Providers)
@@ -3130,7 +3093,7 @@ Function OutputAppendixA
 {
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix A Advanced Server Items (Server/Network)"
 	#sort the array by servername
-	$Script:AdvancedItems1 = $Script:AdvancedItems1 | Sort ServerName
+	$Script:AdvancedItems1 = $Script:AdvancedItems1 | Sort-Object ServerName
 
 	Line 0 "Appendix A - Advanced Server Items (Server/Network)"
 	Line 0 ""
@@ -3156,7 +3119,7 @@ Function OutputAppendixB
 {
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix B Advanced Server Items (Pacing/Device)"
 	#sort the array by servername
-	$Script:AdvancedItems2 = $Script:AdvancedItems2 | Sort ServerName
+	$Script:AdvancedItems2 = $Script:AdvancedItems2 | Sort-Object ServerName
 
 	Line 0 "Appendix B - Advanced Server Items (Pacing/Device)"
 	Line 0 ""
@@ -3183,7 +3146,7 @@ Function OutputAppendixC
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix C Config Wizard Items"
 
 	#sort the array by servername
-	$Script:ConfigWizItems = $Script:ConfigWizItems | Sort ServerName
+	$Script:ConfigWizItems = $Script:ConfigWizItems | Sort-Object ServerName
 	
 	Line 0 "Appendix C - Configuration Wizard Settings"
 	Line 0 ""
@@ -3214,7 +3177,7 @@ Function OutputAppendixD
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix D Server Bootstrap Items"
 
 	#sort the array by bootstrapname and servername
-	$Script:BootstrapItems = $Script:BootstrapItems | Sort BootstrapName, ServerName
+	$Script:BootstrapItems = $Script:BootstrapItems | Sort-Object BootstrapName, ServerName
 	
 	Line 0 "Appendix D - Server Bootstrap Items"
 	Line 0 ""
@@ -3244,7 +3207,7 @@ Function OutputAppendixE
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix E DisableTaskOffload Setting"
 
 	#sort the array by bootstrapname and servername
-	$Script:TaskOffloadItems = $Script:TaskOffloadItems | Sort ServerName
+	$Script:TaskOffloadItems = $Script:TaskOffloadItems | Sort-Object ServerName
 	
 	Line 0 "Appendix E - DisableTaskOffload Settings"
 	Line 0 ""
@@ -3275,7 +3238,7 @@ Function OutputAppendixF
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix F PVS Services"
 
 	#sort the array by displayname and servername
-	$Script:PVSServiceItems = $Script:PVSServiceItems | Sort DisplayName, ServerName
+	$Script:PVSServiceItems = $Script:PVSServiceItems | Sort-Object DisplayName, ServerName
 	
 	Line 0 "Appendix F - Server PVS Service Items"
 	Line 0 ""
@@ -3307,7 +3270,7 @@ Function OutputAppendixF2
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix F2 PVS Services Failure Actions"
 
 	#sort the array by displayname and servername
-	$Script:PVSServiceItems = $Script:PVSServiceItems | Sort DisplayName, ServerName
+	$Script:PVSServiceItems = $Script:PVSServiceItems | Sort-Object DisplayName, ServerName
 	
 	Line 0 "Appendix F2 - Server PVS Service Items Failure Actions"
 	Line 0 ""
@@ -3336,7 +3299,7 @@ Function OutputAppendixG
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix G vDisks to Merge"
 
 	#sort the array
-	$Script:VersionsToMerge = $Script:VersionsToMerge | Sort
+	$Script:VersionsToMerge = $Script:VersionsToMerge | Sort-Object
 	
 	Line 0 "Appendix G - vDisks to Consider Merging"
 	Line 0 ""
@@ -3364,7 +3327,7 @@ Function OutputAppendixH
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix H Empty Device Collections"
 
 	#sort the array
-	$Script:EmptyDeviceCollections = $Script:EmptyDeviceCollections | Sort
+	$Script:EmptyDeviceCollections = $Script:EmptyDeviceCollections | Sort-Object
 	
 	Line 0 "Appendix H - Empty Device Collections"
 	Line 0 ""
@@ -3455,7 +3418,7 @@ Function OutputAppendixI
 	If($vDisks)
 	{
 		#sort the array
-		$vDisks = $vDisks | Sort
+		$vDisks = $vDisks | Sort-Object
 	
 		ForEach($Item in $vDisks)
 		{
@@ -3478,7 +3441,7 @@ Function OutputAppendixJ
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix J Bad Streaming IP Addresses"
 
 	#sort the array by bootstrapname and servername
-	$Script:BadIPs = $Script:BadIPs | Sort ServerName, IPAddress
+	$Script:BadIPs = $Script:BadIPs | Sort-Object ServerName, IPAddress
 	
 	Line 0 "Appendix J - Bad Streaming IP Addresses"
 	Line 0 "Streaming IP addresses that do not exist on the server"
@@ -3507,7 +3470,7 @@ Function OutputAppendixK
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix K Misc Registry Items"
 
 	#sort the array by regkey, regvalue and servername
-	$Script:MiscRegistryItems = $Script:MiscRegistryItems | Sort RegKey, RegValue, ServerName
+	$Script:MiscRegistryItems = $Script:MiscRegistryItems | Sort-Object RegKey, RegValue, ServerName
 	
 	Line 0 "Appendix K - Misc Registry Items"
 	Line 0 "Miscellaneous Registry Items That May or May Not Exist on Servers"
@@ -3550,7 +3513,7 @@ Function OutputAppendixL
 {
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix L vDisks Configured for Server Side Caching"
 	#sort the array 
-	$Script:CacheOnServer = $Script:CacheOnServer | Sort StoreName,SiteName,vDiskName
+	$Script:CacheOnServer = $Script:CacheOnServer | Sort-Object StoreName,SiteName,vDiskName
 
 	Line 0 "Appendix L - vDisks Configured for Server Side Caching"
 	Line 0 ""
