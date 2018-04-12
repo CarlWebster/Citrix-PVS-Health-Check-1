@@ -4,6 +4,9 @@
 #@carlwebster on Twitter
 #http://www.CarlWebster.com
 
+#Version 1.15 12-Apr-2018
+#	Fixed invalid variable $Text
+
 #Version 1.14 7-Apr-2018
 #	Added Operating System information to Functions GetComputerWMIInfo and OutputComputerItem
 #	Code cleanup from Visual Studio Code

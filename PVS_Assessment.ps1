@@ -96,9 +96,9 @@
 	No objects are output from this script.  This script creates a text file.
 .NOTES
 	NAME: PVS_Assessment.ps1
-	VERSION: 1.12
+	VERSION: 1.15
 	AUTHOR: Carl Webster, Sr. Solutions Architect at Choice Solutions (with a lot of help from BG a, now former, Citrix dev)
-	LASTEDIT: February 28, 2017
+	LASTEDIT: April 12, 2018
 #>
 
 
@@ -147,6 +147,9 @@ Param(
 #http://www.CarlWebster.com
 #script created August 8, 2015
 #released to the community on February 2, 2016
+#
+#Version 1.15 12-Apr-2018
+#	Fixed invalid variable $Text
 #
 #Version 1.14 7-Apr-2018
 #	Added Operating System information to Functions GetComputerWMIInfo and OutputComputerItem
@@ -270,11 +273,8 @@ Function GetComputerWMIInfo
 	#Get Computer info
 	Write-Verbose "$(Get-Date): `t`tProcessing WMI Computer information"
 	Write-Verbose "$(Get-Date): `t`t`tHardware information"
-	If($Text)
-	{
-		Line 0 "Computer Information: $($RemoteComputerName)"
-		Line 1 "General Computer"
-	}
+	Line 0 "Computer Information: $($RemoteComputerName)"
+	Line 1 "General Computer"
 	
 	[bool]$GotComputerItems = $True
 	
@@ -305,31 +305,22 @@ Function GetComputerWMIInfo
 	{
 		Write-Verbose "$(Get-Date): Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
 		Write-Warning "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
-		If($Text)
-		{
-			Line 2 "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
-			Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-			Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-			Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
-			Line 2 ""
-		}
+		Line 2 "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
+		Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
+		Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
+		Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+		Line 2 ""
 	}
 	Else
 	{
 		Write-Verbose "$(Get-Date): No results Returned for Computer information"
-		If($Text)
-		{
-			Line 2 "No results Returned for Computer information"
-		}
+		Line 2 "No results Returned for Computer information"
 	}
 	
 	#Get Disk info
 	Write-Verbose "$(Get-Date): `t`t`tDrive information"
 
-	If($Text)
-	{
-		Line 1 "Drive(s)"
-	}
+	Line 1 "Drive(s)"
 
 	[bool]$GotDrives = $True
 	
@@ -361,31 +352,22 @@ Function GetComputerWMIInfo
 	{
 		Write-Verbose "$(Get-Date): Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
 		Write-Warning "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
-		If($Text)
-		{
-			Line 2 "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
-			Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-			Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-			Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
-		}
+		Line 2 "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
+		Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
+		Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
+		Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
 	}
 	Else
 	{
 		Write-Verbose "$(Get-Date): No results Returned for Drive information"
-		If($Text)
-		{
-			Line 2 "No results Returned for Drive information"
-		}
+		Line 2 "No results Returned for Drive information"
 	}
 	
 
 	#Get CPU's and stepping
 	Write-Verbose "$(Get-Date): `t`t`tProcessor information"
 
-	If($Text)
-	{
-		Line 1 "Processor(s)"
-	}
+	Line 1 "Processor(s)"
 
 	[bool]$GotProcessors = $True
 	
@@ -413,30 +395,21 @@ Function GetComputerWMIInfo
 	{
 		Write-Verbose "$(Get-Date): Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
 		Write-Warning "Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
-		If($Text)
-		{
-			Line 2 "Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
-			Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-			Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-			Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
-		}
+		Line 2 "Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
+		Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
+		Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
+		Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
 	}
 	Else
 	{
 		Write-Verbose "$(Get-Date): No results Returned for Processor information"
-		If($Text)
-		{
-			Line 2 "No results Returned for Processor information"
-		}
+		Line 2 "No results Returned for Processor information"
 	}
 
 	#Get Nics
 	Write-Verbose "$(Get-Date): `t`t`tNIC information"
 
-	If($Text)
-	{
-		Line 1 "Network Interface(s)"
-	}
+	Line 1 "Network Interface(s)"
 
 	[bool]$GotNics = $True
 	
@@ -487,22 +460,16 @@ Function GetComputerWMIInfo
 					Write-Warning "$(Get-Date): Error retrieving NIC information"
 					Write-Verbose "$(Get-Date): Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
 					Write-Warning "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-					If($Text)
-					{
-						Line 2 "Error retrieving NIC information"
-						Line 2 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-						Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-						Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-						Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
-					}
+					Line 2 "Error retrieving NIC information"
+					Line 2 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+					Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
+					Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
+					Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
 				}
 				Else
 				{
 					Write-Verbose "$(Get-Date): No results Returned for NIC information"
-					If($Text)
-					{
-						Line 2 "No results Returned for NIC information"
-					}
+					Line 2 "No results Returned for NIC information"
 				}
 			}
 		}	
@@ -512,28 +479,19 @@ Function GetComputerWMIInfo
 		Write-Warning "$(Get-Date): Error retrieving NIC configuration information"
 		Write-Verbose "$(Get-Date): Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
 		Write-Warning "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-		If($Text)
-		{
-			Line 2 "Error retrieving NIC configuration information"
-			Line 2 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-			Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-			Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-			Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
-		}
+		Line 2 "Error retrieving NIC configuration information"
+		Line 2 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+		Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
+		Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
+		Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
 	}
 	Else
 	{
 		Write-Verbose "$(Get-Date): No results Returned for NIC configuration information"
-		If($Text)
-		{
-			Line 2 "No results Returned for NIC configuration information"
-		}
+		Line 2 "No results Returned for NIC configuration information"
 	}
 	
-	If($Text)
-	{
-		Line 0 ""
-	}
+	Line 0 ""
 }
 
 Function OutputComputerItem
@@ -541,17 +499,14 @@ Function OutputComputerItem
 	Param([object]$Item, [string]$OS)
 	# modified 2-Apr-2018 to add Operating System information
 	
-	If($Text)
-	{
-		Line 2 "Manufacturer`t`t`t: " $Item.manufacturer
-		Line 2 "Model`t`t`t`t: " $Item.model
-		Line 2 "Domain`t`t`t`t: " $Item.domain
-		Line 2 "Operating System`t`t: " $OS
-		Line 2 "Total Ram`t`t`t: $($Item.totalphysicalram) GB"
-		Line 2 "Physical Processors (sockets)`t: " $Item.NumberOfProcessors
-		Line 2 "Logical Processors (cores w/HT)`t: " $Item.NumberOfLogicalProcessors
-		Line 2 ""
-	}
+	Line 2 "Manufacturer`t`t`t: " $Item.manufacturer
+	Line 2 "Model`t`t`t`t: " $Item.model
+	Line 2 "Domain`t`t`t`t: " $Item.domain
+	Line 2 "Operating System`t`t: " $OS
+	Line 2 "Total Ram`t`t`t: $($Item.totalphysicalram) GB"
+	Line 2 "Physical Processors (sockets)`t: " $Item.NumberOfProcessors
+	Line 2 "Logical Processors (cores w/HT)`t: " $Item.NumberOfLogicalProcessors
+	Line 2 ""
 }
 
 Function OutputDriveItem
