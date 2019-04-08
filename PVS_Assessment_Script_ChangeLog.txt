@@ -18,6 +18,8 @@
 #	Changed the variable $pwdpath to $Script:pwdpath
 #	Changed Write-Verbose statements to Write-Host
 #	Fixed bug for Bad Streaming IP Addresses. The $ComputerName parameter was not passed to the OutputNicItem function
+#	Fixed bug when processing Service Failure Actions. It looks like I "assumed" there would always be three failure actions.
+#		Thanks to Martin Therkelsen for finding this logic flaw (bug)
 #	From Function OutputAppendixF2, remove the array sort. The same array is sorted in Function OutputAppendixF
 #	In Function OutputNicItem, Changed how $powerMgmt is retrieved.
 #		Will now show "Not Supported" instead of "N/A" if the NIC driver does not support Power Management (i.e. XenServer)

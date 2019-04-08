@@ -202,6 +202,8 @@ Param(
 #	Changed the variable $pwdpath to $Script:pwdpath
 #	Changed Write-Verbose statements to Write-Host
 #	Fixed bug for Bad Streaming IP Addresses. The $ComputerName parameter was not passed to the OutputNicItem function
+#	Fixed bug when processing Service Failure Actions. It looks like I "assumed" there would always be three failure actions.
+#		Thanks to Martin Therkelsen for finding this logic flaw (bug)
 #	From Function OutputAppendixF2, remove the array sort. The same array is sorted in Function OutputAppendixF
 #	In Function OutputNicItem, Changed how $powerMgmt is retrieved.
 #		Will now show "Not Supported" instead of "N/A" if the NIC driver does not support Power Management (i.e. XenServer)
@@ -2231,7 +2233,9 @@ Function ProcessPVSSite
 					{
 						Line 2 "No Target Devices found. Device Collection is empty."
 						Line 0 ""
-						$Script:EmptyDeviceCollections += $Collection.collectionName
+						$obj1 = New-Object -TypeName PSObject
+						$obj1 | Add-Member -MemberType NoteProperty -Name CollectionName	-Value $Collection.collectionName
+						$Script:EmptyDeviceCollections += $obj1
 					}
 				}
 			}
@@ -2486,7 +2490,10 @@ Function GetPVSServiceInfo
 	Param([string]$ComputerName)
 
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing PVS Services for Server $($server.servername)"
-	$Services = Get-WmiObject -ComputerName $ComputerName Win32_Service -EA 0 | Where-Object {$_.DisplayName -like "Citrix PVS*"} | Select-Object displayname, name, status, startmode, started, startname, state 
+	$Services = Get-WmiObject -ComputerName $ComputerName Win32_Service -EA 0 | `
+	Where-Object {$_.DisplayName -like "Citrix PVS*"} | `
+	Select-Object displayname, name, status, startmode, started, startname, state | `
+	Sort-Object DisplayName
 	
 	If($? -and $Null -ne $Services)
 	{
@@ -2514,10 +2521,42 @@ Function GetPVSServiceInfo
 					{
 						Switch ($Item)
 						{
-							{$Item -like "*RESTART -- Delay*"}		{$cnt++; $obj1 | Add-Member -MemberType NoteProperty -Name $("FailureAction$($Cnt)")	-Value "Restart the Service"}
-							{$Item -like "*RUN PROCESS -- Delay*"}	{$cnt++; $obj1 | Add-Member -MemberType NoteProperty -Name $("FailureAction$($Cnt)")	-Value "Run a Program"}
-							{$Item -like "*REBOOT -- Delay*"}		{$cnt++; $obj1 | Add-Member -MemberType NoteProperty -Name $("FailureAction$($Cnt)")	-Value "Restart the Computer"}
+							{$Item -like "*RESTART -- Delay*"}		{$cnt++; $obj1 | Add-Member -MemberType NoteProperty -Name $("FailureAction$($Cnt)")	-Value "Restart the Service"; Break}
+							{$Item -like "*RUN PROCESS -- Delay*"}	{$cnt++; $obj1 | Add-Member -MemberType NoteProperty -Name $("FailureAction$($Cnt)")	-Value "Run a Program"; Break}
+							{$Item -like "*REBOOT -- Delay*"}		{$cnt++; $obj1 | Add-Member -MemberType NoteProperty -Name $("FailureAction$($Cnt)")	-Value "Restart the Computer"; Break}
 						}
+					}
+					
+					#added in V1.16 to handle where less than three failure actions are configured
+					#thanks to Martin Therkelsen for finding this logic flaw (bug)
+					Switch ($cnt) 
+					{
+						0 
+							{
+								$obj1 | Add-Member -MemberType NoteProperty -Name FailureAction1	-Value "Take no Action"
+								$obj1 | Add-Member -MemberType NoteProperty -Name FailureAction2	-Value "Take no Action"
+								$obj1 | Add-Member -MemberType NoteProperty -Name FailureAction3	-Value "Take no Action"
+								Break
+							}
+						
+						1
+							{
+								$obj1 | Add-Member -MemberType NoteProperty -Name FailureAction2	-Value "Take no Action"
+								$obj1 | Add-Member -MemberType NoteProperty -Name FailureAction3	-Value "Take no Action"
+								Break
+							}
+						
+						2
+							{
+								$obj1 | Add-Member -MemberType NoteProperty -Name FailureAction3	-Value "Take no Action"
+								Break
+							}
+						
+						3
+							{
+								#nothing to do
+								Break
+							}
 					}
 				}
 				Else
@@ -2551,10 +2590,10 @@ Function GetPVSProcessInfo
 
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing PVS Processes for Server $($server.servername)"
 
-	[bool]$InventoryProcess = Get-Process -Name 'Inventory' -ComputerName $ComputerName
-	[bool]$NotifierProcess = Get-Process -Name 'Notifier' -ComputerName $ComputerName
-	[bool]$MgmtDaemonProcess = Get-Process -Name 'MgmtDaemon' -ComputerName $ComputerName
-	[bool]$StreamProcessProcess = Get-Process -Name 'StreamProcess' -ComputerName $ComputerName
+	$InventoryProcess = Get-Process -Name 'Inventory' -ComputerName $ComputerName
+	$NotifierProcess = Get-Process -Name 'Notifier' -ComputerName $ComputerName
+	$MgmtDaemonProcess = Get-Process -Name 'MgmtDaemon' -ComputerName $ComputerName
+	$StreamProcessProcess = Get-Process -Name 'StreamProcess' -ComputerName $ComputerName
 	
 	$obj1 = New-Object -TypeName PSObject
 	$obj1 | Add-Member -MemberType NoteProperty -Name ProcessName	-Value "Inventory"
@@ -2613,7 +2652,7 @@ Function GetBadStreamingIPAddresses
 {
 	Param([string]$ComputerName)
 	#function updated by Andrew Williamson @ Fujitsu Services to handle servers with multiple NICs
-	#further optiization by Michael B. Smith
+	#further optimization by Michael B. Smith
 
 	#loop through the configured streaming ip address and compare to the physical configured ip addresses
 	#if a streaming ip address is not in the list of physical ip addresses, it is a bad streaming ip address
@@ -3014,7 +3053,9 @@ Function ProcessvDisksinFarm
 							{
 								$VersionFlag = $True
 								Line 2 "Version of vDisk is $($DiskVersion.version) which is greater than the limit of $($Script:farm.maxVersions). Consider merging."
-								$Script:VersionsToMerge += $Disk.diskLocatorName
+								$obj1 = New-Object -TypeName PSObject
+								$obj1 | Add-Member -MemberType NoteProperty -Name vDiskName	-Value $Disk.diskLocatorName
+								$Script:VersionsToMerge += $obj1
 								
 							}
 							Line 2 "Created: " $DiskVersion.createDate
@@ -3622,7 +3663,7 @@ Function OutputAppendixH
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix H Empty Device Collections"
 
 	#sort the array
-	$Script:EmptyDeviceCollections = $Script:EmptyDeviceCollections | Sort-Object
+	$Script:EmptyDeviceCollections = $Script:EmptyDeviceCollections | Sort-Object CollectionName
 	
 	If($CSV)
 	{
@@ -3687,7 +3728,10 @@ Function ProcessvDisksWithNoAssociation
 			Else
 			{
 				#no device found that uses this vDisk
-				$UnassociatedvDisks += $DiskLocator.diskLocatorName
+				#$UnassociatedvDisks += $DiskLocator.diskLocatorName
+				$obj1 = New-Object -TypeName PSObject
+				$obj1 | Add-Member -MemberType NoteProperty -Name vDiskName	-Value $DiskLocator.diskLocatorName
+				$UnassociatedvDisks += $obj1
 			}
 		}
 		
