@@ -1,11 +1,12 @@
 <#
 .SYNOPSIS
-	Creates a basic assessment of a Citrix PVS 5.x, 6.x or 7.x farm.
+	Creates a basic assessment of a Citrix PVS 5.x or later farm.
 .DESCRIPTION
-	Creates a basic assessment of a Citrix PVS 5.x, 6.x or 7.x farm.
+	Creates a basic assessment of a Citrix PVS 5.x or later farm.
+	
 	Creates a text document named after the PVS farm.
 	
-	Register the PVS Console PowerShell Snap-in.
+	Register the old string-based PVS Console PowerShell Snap-in.
 
 	For versions of Windows prior to Windows 8 and Server 2012, run:
 	
@@ -50,7 +51,7 @@
 		TNPVSFarm_Assessment_AppendixH_EmptyDeviceCollections.csv	
 		TNPVSFarm_Assessment_AppendixI_UnassociatedvDisks.csv	
 		TNPVSFarm_Assessment_AppendixJ_BadStreamingIPAddresses.csv	
-		TNPVSFarm_Assessment_AppendixK_MiscRegistryItems.csv	
+		TNPVSFarm_Assessment_AppendixK_MiscRegistryItems.csv
 		TNPVSFarm_Assessment_AppendixL_vDisksConfiguredforServerSideCaching.csv	
 		TNPVSFarm_Assessment_AppendixM_MicrosoftHotfixesandUpdates.csv
 		TNPVSFarm_Assessment_AppendixN_InstalledRolesandFeatures.csv
@@ -105,15 +106,21 @@
 	
 	Output file will be saved in the path \\FileServer\ShareName
 .EXAMPLE
-	PS C:\PSScript > .\PVS_Assessment.ps1 -SmtpServer mail.domain.tld -From XDAdmin@domain.tld -To ITGroup@domain.tld -ComputerName DHCPServer01
+	PS C:\PSScript > .\PVS_Assessment.ps1 -SmtpServer mail.domain.tld -From 
+	XDAdmin@domain.tld -To ITGroup@domain.tld -ComputerName DHCPServer01
 	
-	Script will use the email server mail.domain.tld, sending from XDAdmin@domain.tld, sending to ITGroup@domain.tld.
-	If the current user's credentials are not valid to send email, the user will be prompted to enter valid credentials.
+	Script will use the email server mail.domain.tld, sending from XDAdmin@domain.tld, 
+	sending to ITGroup@domain.tld.
+	If the current user's credentials are not valid to send email, the user will be prompted 
+	to enter valid credentials.
 .EXAMPLE
-	PS C:\PSScript > .\PVS_Assessment.ps1 -SmtpServer smtp.office365.com -SmtpPort 587 -UseSSL -From Webster@CarlWebster.com -To ITGroup@CarlWebster.com
+	PS C:\PSScript > .\PVS_Assessment.ps1 -SmtpServer smtp.office365.com -SmtpPort 587 
+	-UseSSL -From Webster@CarlWebster.com -To ITGroup@CarlWebster.com
 	
-	Script will use the email server smtp.office365.com on port 587 using SSL, sending from webster@carlwebster.com, sending to ITGroup@carlwebster.com.
-	If the current user's credentials are not valid to send email, the user will be prompted to enter valid credentials.
+	Script will use the email server smtp.office365.com on port 587 using SSL, sending from 
+	webster@carlwebster.com, sending to ITGroup@carlwebster.com.
+	If the current user's credentials are not valid to send email, the user will be prompted 
+	to enter valid credentials.
 .EXAMPLE
 	PS C:\PSScript > .\PVS_Assessment.ps1 -CSV
 	
@@ -128,7 +135,7 @@
 	NAME: PVS_Assessment.ps1
 	VERSION: 1.16
 	AUTHOR: Carl Webster, Sr. Solutions Architect at Choice Solutions (with a lot of help from BG a, now former, Citrix dev)
-	LASTEDIT: April 4, 2019
+	LASTEDIT: April 9, 2019
 #>
 
 
@@ -181,25 +188,25 @@ Param(
 #script created August 8, 2015
 #released to the community on February 2, 2016
 #
-#Version 1.16
-#	Add "_Assessment" to output script report filename
-#	Add -CSV parameter
-#	Add Function GetInstalledRolesAndFeatures
-#	Add Function Get-IPAddress
-#	Add Function GetMicrosoftHotfixes
-#	Add Function GetPVSProcessInfo
-#	Add Function validObject
-#	Add License Server IP address to Farm information
-#	Add SQL Server IP address to Farm information
-#	Add Failover SQL Server IP address to Farm information
-#	Change the variable $pwdpath to $Script:pwdpath
-#	Change Write-Verbose statements to Write-Host
-#	Fixed bug for Bad Streaming IP addresses. The $ComputerName parameter was not passed to the OutputNicItem function
-#	From Function OutputAppendixF2, remote the array sort. The same array is sorted in Function OutputAppendixF
-#	In Function OutputNicItem, change how $powerMgmt is retrieved.
+#Version 1.16 9-Apr-2019
+#	Added "_Assessment" to output script report filename
+#	Added -CSV parameter
+#	Added Function GetInstalledRolesAndFeatures
+#	Added Function Get-IPAddress
+#	Added Function GetMicrosoftHotfixes
+#	Added Function GetPVSProcessInfo
+#	Added Function validObject
+#	Added License Server IP Address to Farm information
+#	Added SQL Server IP Address to Farm information
+#	Added Failover SQL Server IP Address to Farm information
+#	Changed the variable $pwdpath to $Script:pwdpath
+#	Changed Write-Verbose statements to Write-Host
+#	Fixed bug for Bad Streaming IP Addresses. The $ComputerName parameter was not passed to the OutputNicItem function
+#	From Function OutputAppendixF2, remove the array sort. The same array is sorted in Function OutputAppendixF
+#	In Function OutputNicItem, Changed how $powerMgmt is retrieved.
 #		Will now show "Not Supported" instead of "N/A" if the NIC driver does not support Power Management (i.e. XenServer)
-#	To the DisableTaskOffload AppendixE, add the statement "This setting is not needed if you are running PVS 6.0 or later"
-#	Update each function that outputs each appendix to output a CSV file if -CSV is used
+#	To the DisableTaskOffload AppendixE, Added the statement "This setting is not needed if you are running PVS 6.0 or later"
+#	Updated each function that outputs each appendix to output a CSV file if -CSV is used
 #		Output CSV filename is in the format:
 #		PVSFarmName_Assessment_Appendix#_NameOfAppendix.csv
 #		For example:
@@ -215,10 +222,10 @@ Param(
 #			TNPVSFarm_Assessment_AppendixJ_BadStreamingIPAddresses.csv	
 #			TNPVSFarm_Assessment_AppendixK_MiscRegistryItems.csv	
 #			TNPVSFarm_Assessment_AppendixL_vDisksConfiguredforServerSideCaching.csv	
-#			TNPVSFarm_Assessment_AppendixM_MicrosoftHotfixesandUpdates.csv
+#			TNPVSFarm_Assessment_AppendixM_MicrosoftHotfixesandUpdateds.csv
 #			TNPVSFarm_Assessment_AppendixN_InstalledRolesandFeatures.csv
 #			TNPVSFarm_Assessment_AppendixO_PVSProcesses.csv
-#	Update help text
+#	Updated help text
 #
 #Version 1.15 12-Apr-2018
 #	Fixed invalid variable $Text
@@ -3823,7 +3830,7 @@ Function OutputAppendixK
 
 Function OutputAppendixL
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix L vDisks Configured for Server Side Caching"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix L vDisks Configured for Server-Side Caching"
 	#sort the array 
 	$Script:CacheOnServer = $Script:CacheOnServer | Sort-Object StoreName,SiteName,vDiskName
 	
@@ -3833,7 +3840,7 @@ Function OutputAppendixL
 		$Script:CacheOnServer | Export-CSV -Force -Encoding ASCII -NoTypeInformation -Path $File
 	}
 
-	Line 0 "Appendix L - vDisks Configured for Server Side Caching"
+	Line 0 "Appendix L - vDisks Configured for Server Side-Caching"
 	Line 0 ""
 
 	If($Script:CacheOnServer -is [array] -and $Script:CacheOnServer.Count -gt 0)
@@ -3854,7 +3861,7 @@ Function OutputAppendixL
 	}
 	Line 0 ""
 	
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix L vDisks Configured for Server Side Caching"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix L vDisks Configured for Server-Side Caching"
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
 }
 
