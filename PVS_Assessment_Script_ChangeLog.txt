@@ -4,6 +4,45 @@
 #@carlwebster on Twitter
 #http://www.CarlWebster.com
 
+#Version 1.16 9-Apr-2019
+#	Added "_Assessment" to output script report filename
+#	Added -CSV parameter
+#	Added Function GetInstalledRolesAndFeatures
+#	Added Function Get-IPAddress
+#	Added Function GetMicrosoftHotfixes
+#	Added Function GetPVSProcessInfo
+#	Added Function validObject
+#	Added License Server IP Address to Farm information
+#	Added SQL Server IP Address to Farm information
+#	Added Failover SQL Server IP Address to Farm information
+#	Changed the variable $pwdpath to $Script:pwdpath
+#	Changed Write-Verbose statements to Write-Host
+#	Fixed bug for Bad Streaming IP Addresses. The $ComputerName parameter was not passed to the OutputNicItem function
+#	From Function OutputAppendixF2, remove the array sort. The same array is sorted in Function OutputAppendixF
+#	In Function OutputNicItem, Changed how $powerMgmt is retrieved.
+#		Will now show "Not Supported" instead of "N/A" if the NIC driver does not support Power Management (i.e. XenServer)
+#	To the DisableTaskOffload AppendixE, Added the statement "This setting is not needed if you are running PVS 6.0 or later"
+#	Updated each function that outputs each appendix to output a CSV file if -CSV is used
+#		Output CSV filename is in the format:
+#		PVSFarmName_Assessment_Appendix#_NameOfAppendix.csv
+#		For example:
+#			TNPVSFarm_Assessment_AppendixA_AdvancedServerItems1.csv
+#			TNPVSFarm_Assessment_AppendixB_AdvancedServerItems2.csv
+#			TNPVSFarm_Assessment_AppendixC_ConfigWizardItems.csv
+#			TNPVSFarm_Assessment_AppendixD_ServerBootstrapItems.csv
+#			TNPVSFarm_Assessment_AppendixE_DisableTaskOffloadSetting.csv	
+#			TNPVSFarm_Assessment_AppendixF_PVSServices.csv
+#			TNPVSFarm_Assessment_AppendixG_vDiskstoMerge.csv	
+#			TNPVSFarm_Assessment_AppendixH_EmptyDeviceCollections.csv	
+#			TNPVSFarm_Assessment_AppendixI_UnassociatedvDisks.csv	
+#			TNPVSFarm_Assessment_AppendixJ_BadStreamingIPAddresses.csv	
+#			TNPVSFarm_Assessment_AppendixK_MiscRegistryItems.csv	
+#			TNPVSFarm_Assessment_AppendixL_vDisksConfiguredforServerSideCaching.csv	
+#			TNPVSFarm_Assessment_AppendixM_MicrosoftHotfixesandUpdateds.csv
+#			TNPVSFarm_Assessment_AppendixN_InstalledRolesandFeatures.csv
+#			TNPVSFarm_Assessment_AppendixO_PVSProcesses.csv
+#	Updated help text
+
 #Version 1.15 12-Apr-2018
 #	Fixed invalid variable $Text
 
