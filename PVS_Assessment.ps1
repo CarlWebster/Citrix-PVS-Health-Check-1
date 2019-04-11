@@ -15,7 +15,7 @@
 	For 64-bit:
 		%systemroot%\Microsoft.NET\Framework64\v2.0.50727\installutil.exe "%ProgramFiles%\Citrix\Provisioning Services Console\McliPSSnapIn.dll"
 
-	For Windows 8.x, Server 2012 and Server 2012 R2, run:
+	For Windows 8.1 and later, Server 2012 and later, run:
 	
 	For 32-bit:
 		%systemroot%\Microsoft.NET\Framework\v4.0.30319\installutil.exe "%ProgramFiles%\Citrix\Provisioning Services Console\McliPSSnapIn.dll"
@@ -26,6 +26,9 @@
 
 	If you are running 64-bit Windows, you will need to run both commands so 
 	the snap-in is registered for both 32-bit and 64-bit PowerShell.
+	
+	NOTE: The account used to run this script must have at least Read access to the SQL 
+	Server that holds the Citrix Provisioning databases.
 
 .PARAMETER AdminAddress
 	Specifies the name of a PVS server that the PowerShell script will connect to. 
@@ -133,9 +136,9 @@
 	No objects are output from this script.  This script creates a text file.
 .NOTES
 	NAME: PVS_Assessment.ps1
-	VERSION: 1.16
+	VERSION: 1.17
 	AUTHOR: Carl Webster, Sr. Solutions Architect at Choice Solutions (with a lot of help from BG a, now former, Citrix dev)
-	LASTEDIT: April 9, 2019
+	LASTEDIT: April 11, 2019
 #>
 
 
@@ -188,6 +191,15 @@ Param(
 #script created August 8, 2015
 #released to the community on February 2, 2016
 #
+#Version 1.17
+#	Added Function ShowScriptOptions to show Parameters and some script values at the start of the script
+#	If no AdminAddress is entered, retrieve the local computer's name from $env:ComputerName
+#	Replaced all PSObject with PSCustomObject
+#	Updated Function line to use the optimized function from MBS from the Active Directory doc script
+#		Rewrote Line to use StringBuilder for speed
+#	Updated help text and ReadMe
+#	Went to Set-StrictMode -Version Latest, from Version 2 and cleaned up all related errors
+#	
 #Version 1.16 9-Apr-2019
 #	Added "_Assessment" to output script report filename
 #	Added -CSV parameter
@@ -294,7 +306,7 @@ Param(
 #	Added the option to email the output file
 #	Fixed several spacing and typo errors
 
-Set-StrictMode -Version 2
+Set-StrictMode -Version Latest
 
 If($Folder -ne "")
 {
@@ -323,22 +335,24 @@ If($Folder -ne "")
 	}
 }
 
-$Script:AdvancedItems1 = @()
-$Script:AdvancedItems2 = @()
-$Script:ConfigWizItems = @()
-$Script:BootstrapItems = @()
-$Script:TaskOffloadItems = @()
-$Script:PVSServiceItems = @()
-$Script:VersionsToMerge = @()
+[string]$Script:RunningOS = (Get-WmiObject -class Win32_OperatingSystem -EA 0).Caption
+
+$Script:AdvancedItems1         = New-Object System.Collections.ArrayList
+$Script:AdvancedItems2         = New-Object System.Collections.ArrayList
+$Script:ConfigWizItems         = New-Object System.Collections.ArrayList
+$Script:BootstrapItems         = New-Object System.Collections.ArrayList
+$Script:TaskOffloadItems       = New-Object System.Collections.ArrayList
+$Script:PVSServiceItems        = New-Object System.Collections.ArrayList
+$Script:VersionsToMerge        = New-Object System.Collections.ArrayList
 $Script:NICIPAddresses = @{}
-$Script:StreamingIPAddresses = @()
-$Script:BadIPs = @()
-$Script:EmptyDeviceCollections = @()
-$Script:MiscRegistryItems = @()
-$Script:CacheOnServer = @()
-$Script:MSHotfixes = New-Object System.Collections.ArrayList	
+$Script:StreamingIPAddresses   = New-Object System.Collections.ArrayList
+$Script:BadIPs                 = New-Object System.Collections.ArrayList
+$Script:EmptyDeviceCollections = New-Object System.Collections.ArrayList
+$Script:MiscRegistryItems      = New-Object System.Collections.ArrayList
+$Script:CacheOnServer          = New-Object System.Collections.ArrayList
+$Script:MSHotfixes             = New-Object System.Collections.ArrayList	
 $Script:WinInstalledComponents = New-Object System.Collections.ArrayList	
-$Script:PVSProcessItems = @()
+$Script:PVSProcessItems        = New-Object System.Collections.ArrayList
 
 Function Get-IPAddress
 {
@@ -398,8 +412,6 @@ Function GetComputerWMIInfo
 	Line 0 "Computer Information: $($RemoteComputerName)"
 	Line 1 "General Computer"
 	
-	[bool]$GotComputerItems = $True
-	
 	Try
 	{
 		$Results = Get-WmiObject -computername $RemoteComputerName win32_computersystem
@@ -444,8 +456,6 @@ Function GetComputerWMIInfo
 
 	Line 1 "Drive(s)"
 
-	[bool]$GotDrives = $True
-	
 	Try
 	{
 		$Results = Get-WmiObject -computername $RemoteComputerName Win32_LogicalDisk
@@ -491,8 +501,6 @@ Function GetComputerWMIInfo
 
 	Line 1 "Processor(s)"
 
-	[bool]$GotProcessors = $True
-	
 	Try
 	{
 		$Results = Get-WmiObject -computername $RemoteComputerName win32_Processor
@@ -550,7 +558,7 @@ Function GetComputerWMIInfo
 		$Nics = $Results | Where-Object {$Null -ne $_.ipaddress}
 		$Results = $Null
 
-		If($Nics -eq $Null ) 
+		If($Null -eq $Nics) 
 		{ 
 			$GotNics = $False 
 		} 
@@ -1116,14 +1124,14 @@ Function GetConfigWizardInfo
 	}
 
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Gather Config Wizard info for Appendix C"
-	$obj1 = New-Object -TypeName PSObject
-	
-	$obj1 | Add-Member -MemberType NoteProperty -Name ServerName 		-Value $ComputerName
-	$obj1 | Add-Member -MemberType NoteProperty -Name DHCPServicesValue	-Value $DHCPServicesValue
-	$obj1 | Add-Member -MemberType NoteProperty -Name PXEServicesValue  -Value $PXEServiceValue
-	$obj1 | Add-Member -MemberType NoteProperty -Name UserAccount  		-Value $UserAccount
-	$obj1 | Add-Member -MemberType NoteProperty -Name TFTPOptionValue	-Value $TFTPOptionValue
-	$Script:ConfigWizItems +=  $obj1
+	$obj1 = [PSCustomObject] @{
+		ServerName        = $ComputerName
+		DHCPServicesValue = $DHCPServicesValue
+		PXEServicesValue  = $PXEServiceValue
+		UserAccount       = $UserAccount
+		TFTPOptionValue   = $TFTPOptionValue
+	}
+	$null = $Script:ConfigWizItems.Add($obj1)
 	
 	Line 2 "Configuration Wizard Settings"
 	Line 3 "DHCP Services: " $DHCPServices
@@ -1150,11 +1158,11 @@ Function GetDisableTaskOffloadInfo
 		$TaskOffloadValue = "Missing"
 	}
 	
-	$obj1 = New-Object -TypeName PSObject
-	
-	$obj1 | Add-Member -MemberType NoteProperty -Name ServerName 		-Value $ComputerName
-	$obj1 | Add-Member -MemberType NoteProperty -Name TaskOffloadValue	-Value $TaskOffloadValue
-	$Script:TaskOffloadItems +=  $obj1
+	$obj1 = [PSCustomObject] @{
+		ServerName       = $ComputerName	
+		TaskOffloadValue = $TaskOffloadValue	
+	}
+	$null = $Script:TaskOffloadItems.Add($obj1)
 	
 	Line 2 "TaskOffload Settings"
 	Line 3 "Value: " $TaskOffloadValue
@@ -1171,19 +1179,22 @@ Function Get-RegKeyToObject
 	
     $val = Get-RegistryValue $RegPath $RegKey $ComputerName
 	
-    $obj1 = New-Object -TypeName PSObject
-	$obj1 | Add-Member -MemberType NoteProperty -Name ServerName	-Value $ComputerName
-	$obj1 | Add-Member -MemberType NoteProperty -Name RegKey		-Value $RegPath
-	$obj1 | Add-Member -MemberType NoteProperty -Name RegValue		-Value $RegKey
     If($Null -eq $val) 
 	{
-        $obj1 | Add-Member -MemberType NoteProperty -Name Value		-Value "Not set"
+        $tmp = "Not set"
     } 
 	Else 
 	{
-	    $obj1 | Add-Member -MemberType NoteProperty -Name Value		-Value $val
+	    $tmp = $val
     }
-    $Script:MiscRegistryItems +=  $obj1
+	
+	$obj1 = [PSCustomObject] @{
+		ServerName = $ComputerName	
+		RegKey     = $RegPath	
+		RegValue   = $RegKey	
+		Value      = $tmp	
+	}
+	$null = $Script:MiscRegistryItems.Add($obj1)
 }
 
 Function GetMiscRegistryKeys
@@ -1453,21 +1464,38 @@ Function Check-NeededPSSnapins
 
 Function line
 #function created by Michael B. Smith, Exchange MVP
-#@essentialexchange on Twitter
-#http://TheEssentialExchange.com
+#@essentialexch on Twitter
+#https://essential.exchange/blog
 #for creating the formatted text report
 #created March 2011
 #updated March 2014
+# updated March 2019 to use StringBuilder (about 100 times more efficient than simple strings)
 {
-	Param( [int]$tabs = 0, [string]$name = '', [string]$value = '', [string]$newLine = "`r`n", [switch]$nonewLine )
-	While( $tabs -gt 0 ) { $Global:Output += "`t"; $tabs--; }
-	If( $nonewLine )
+	Param
+	(
+		[Int]    $tabs = 0, 
+		[String] $name = '', 
+		[String] $value = '', 
+		[String] $newline = [System.Environment]::NewLine, 
+		[Switch] $nonewline
+	)
+
+	while( $tabs -gt 0 )
 	{
-		$Global:Output += $name + $value
+		#V1.17 - switch to using a StringBuilder for $global:Output
+		$null = $global:Output.Append( "`t" )
+		$tabs--
+	}
+
+	If( $nonewline )
+	{
+		#V1.17 - switch to using a StringBuilder for $global:Output
+		$null = $global:Output.Append( $name + $value )
 	}
 	Else
 	{
-		$Global:Output += $name + $value + $newline
+		#V1.17 - switch to using a StringBuilder for $global:Output
+		$null = $global:Output.AppendLine( $name + $value )
 	}
 }
 	
@@ -1476,12 +1504,12 @@ Function SaveandCloseTextDocument
 	If( $Host.Version.CompareTo( [System.Version]'2.0' ) -eq 0 )
 	{
 		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Saving for PoSH V2"
-		Write-Output $Global:Output | Out-String -width 120 | Out-File $Script:Filename1 2>$Null
+		Write-Output $global:Output.ToString() | Out-File $Script:Filename1 2>$Null
 	}
 	Else
 	{
 		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Saving for PoSH V3 or later"
-		Write-Output $Global:Output | Out-String -width 120 | Out-File $Script:Filename1 4>$Null
+		Write-Output $global:Output.ToString() | Out-File $Script:Filename1 4>$Null
 	}
 }
 
@@ -1585,6 +1613,15 @@ Function SetupRemoting
 			Write-Warning "Error returned is " $error[0]
 			Write-Warning "Script cannot continue"
 			Exit
+		}
+	}
+	Else
+	{
+		#added V1.17
+		#if $AdminAddress is "", get actual server name
+		If($AdminAddress -eq "")
+		{
+			$Script:AdminAddress = $env:ComputerName
 		}
 	}
 }
@@ -1949,11 +1986,11 @@ Function ProcessPVSSite
 						
 						ForEach($item in $tmparray)
 						{
-							$obj1 = New-Object -TypeName PSObject
-							
-							$obj1 | Add-Member -MemberType NoteProperty -Name ServerName 	-Value $Server.serverName
-							$obj1 | Add-Member -MemberType NoteProperty -Name IPAddress		-Value $item
-							$Script:StreamingIPAddresses +=  $obj1
+							$obj1 = [PSCustomObject] @{
+								ServerName = $Server.serverName							
+								IPAddress  = $item							
+							}
+							$null = $Script:StreamingIPAddresses.Add($obj1)
 						}
 						If($Script:PVSVersion -eq "7")
 						{
@@ -1973,28 +2010,28 @@ Function ProcessPVSSite
 						#create array for appendix A
 						
 						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Gather Advanced server info for Appendix A and B"
-						$obj1 = New-Object -TypeName PSObject
-						$obj2 = New-Object -TypeName PSObject
+						$obj1 = [PSCustomObject] @{
+							ServerName              = $Server.serverName						
+							ThreadsPerPort          = $Server.threadsPerPort						
+							BuffersPerThread        = $Server.buffersPerThread						
+							ServerCacheTimeout      = $Server.serverCacheTimeout						
+							LocalConcurrentIOLimit  = $Server.localConcurrentIoLimit						
+							RemoteConcurrentIOLimit = $Server.remoteConcurrentIoLimit						
+							maxTransmissionUnits    = $Server.maxTransmissionUnits						
+							IOBurstSize             = $Server.ioBurstSize						
+							NonBlockingIOEnabled    = $Server.nonBlockingIoEnabled						
+						}
+						$null = $Script:AdvancedItems1.Add($obj1)
 						
-						$obj1 | Add-Member -MemberType NoteProperty -Name ServerName              -Value $Server.serverName
-						$obj1 | Add-Member -MemberType NoteProperty -Name ThreadsPerPort          -Value $Server.threadsPerPort
-						$obj1 | Add-Member -MemberType NoteProperty -Name BuffersPerThread        -Value $Server.buffersPerThread
-						$obj1 | Add-Member -MemberType NoteProperty -Name ServerCacheTimeout      -Value $Server.serverCacheTimeout
-						$obj1 | Add-Member -MemberType NoteProperty -Name LocalConcurrentIOLimit  -Value $Server.localConcurrentIoLimit
-						$obj1 | Add-Member -MemberType NoteProperty -Name RemoteConcurrentIOLimit -Value $Server.remoteConcurrentIoLimit
-						$obj1 | Add-Member -MemberType NoteProperty -Name maxTransmissionUnits    -Value $Server.maxTransmissionUnits
-						$obj1 | Add-Member -MemberType NoteProperty -Name IOBurstSize             -Value $Server.ioBurstSize
-						$obj1 | Add-Member -MemberType NoteProperty -Name NonBlockingIOEnabled    -Value $Server.nonBlockingIoEnabled
-
-						$obj2 | Add-Member -MemberType NoteProperty -Name ServerName              -Value $Server.serverName
-						$obj2 | Add-Member -MemberType NoteProperty -Name BootPauseSeconds        -Value $Server.bootPauseSeconds
-						$obj2 | Add-Member -MemberType NoteProperty -Name MaxBootSeconds          -Value $Server.maxBootSeconds
-						$obj2 | Add-Member -MemberType NoteProperty -Name MaxBootDevicesAllowed   -Value $Server.maxBootDevicesAllowed
-						$obj2 | Add-Member -MemberType NoteProperty -Name vDiskCreatePacing       -Value $Server.vDiskCreatePacing
-						$obj2 | Add-Member -MemberType NoteProperty -Name LicenseTimeout          -Value $Server.licenseTimeout
-						
-						$Script:AdvancedItems1 +=  $obj1
-						$Script:AdvancedItems2 +=  $obj2
+						$obj2 = [PSCustomObject] @{
+							ServerName              = $Server.serverName						
+							BootPauseSeconds        = $Server.bootPauseSeconds						
+							MaxBootSeconds          = $Server.maxBootSeconds						
+							MaxBootDevicesAllowed   = $Server.maxBootDevicesAllowed						
+							vDiskCreatePacing       = $Server.vDiskCreatePacing						
+							LicenseTimeout          = $Server.licenseTimeout						
+						}
+						$null = $Script:AdvancedItems2.Add($obj2)
 						
 						GetComputerWMIInfo $server.ServerName
 							
@@ -2233,9 +2270,10 @@ Function ProcessPVSSite
 					{
 						Line 2 "No Target Devices found. Device Collection is empty."
 						Line 0 ""
-						$obj1 = New-Object -TypeName PSObject
-						$obj1 | Add-Member -MemberType NoteProperty -Name CollectionName	-Value $Collection.collectionName
-						$Script:EmptyDeviceCollections += $obj1
+						$obj1 = [PSCustomObject] @{
+							CollectionName = $Collection.collectionName
+						}
+						$null = $Script:EmptyDeviceCollections.Add($obj1)
 					}
 				}
 			}
@@ -2379,15 +2417,15 @@ Function GetBootstrapInfo
 			ForEach($ServerBootstrap in $ServerBootstraps)
 			{
 				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Gather Bootstrap info for Appendix D"
-				$obj1 = New-Object -TypeName PSObject
-				
-				$obj1 | Add-Member -MemberType NoteProperty -Name ServerName 	-Value $Server.serverName
-				$obj1 | Add-Member -MemberType NoteProperty -Name BootstrapName	-Value $ServerBootstrap.Bootstrapname
-				$obj1 | Add-Member -MemberType NoteProperty -Name IP1        	-Value $ServerBootstrap.bootserver1_Ip
-				$obj1 | Add-Member -MemberType NoteProperty -Name IP2        	-Value $ServerBootstrap.bootserver2_Ip
-				$obj1 | Add-Member -MemberType NoteProperty -Name IP3        	-Value $ServerBootstrap.bootserver3_Ip
-				$obj1 | Add-Member -MemberType NoteProperty -Name IP4        	-Value $ServerBootstrap.bootserver4_Ip
-				$Script:BootstrapItems +=  $obj1
+				$obj1 = [PSCustomObject] @{
+					ServerName 	  = $Server.serverName				
+					BootstrapName = $ServerBootstrap.Bootstrapname				
+					IP1        	  = $ServerBootstrap.bootserver1_Ip				
+					IP2        	  = $ServerBootstrap.bootserver2_Ip				
+					IP3        	  = $ServerBootstrap.bootserver3_Ip				
+					IP4        	  = $ServerBootstrap.bootserver4_Ip				
+				}
+				$null = $Script:BootstrapItems.Add($obj1)
 
 				Line 3 "Bootstrap file: " $ServerBootstrap.Bootstrapname
 				If($ServerBootstrap.bootserver1_Ip -ne "0.0.0.0")
@@ -2499,16 +2537,19 @@ Function GetPVSServiceInfo
 	{
 		ForEach($Service in $Services)
 		{
-			$obj1 = New-Object -TypeName PSObject
-			
-			$obj1 | Add-Member -MemberType NoteProperty -Name ServerName 	-Value $ComputerName
-			$obj1 | Add-Member -MemberType NoteProperty -Name DisplayName	-Value $Service.DisplayName
-			$obj1 | Add-Member -MemberType NoteProperty -Name Name  		-Value $Service.Name
-			$obj1 | Add-Member -MemberType NoteProperty -Name Status  		-Value $Service.Status
-			$obj1 | Add-Member -MemberType NoteProperty -Name StartMode  	-Value $Service.StartMode
-			$obj1 | Add-Member -MemberType NoteProperty -Name Started  		-Value $Service.Started
-			$obj1 | Add-Member -MemberType NoteProperty -Name StartName  	-Value $Service.StartName
-			$obj1 | Add-Member -MemberType NoteProperty -Name State  		-Value $Service.State
+			$obj1 = [PSCustomObject] @{
+				ServerName 	   = $ComputerName
+				DisplayName	   = $Service.DisplayName
+				Name  		   = $Service.Name
+				Status 		   = $Service.Status
+				StartMode  	   = $Service.StartMode
+				Started		   = $Service.Started
+				StartName  	   = $Service.StartName
+				State  		   = $Service.State
+				FailureAction1 = "Take no Action"
+				FailureAction2 = "Take no Action"
+				FailureAction3 = "Take no Action"
+			}
 
 			[array]$Actions = sc.exe \\$ComputerName qfailure $Service.Name
 			
@@ -2521,53 +2562,15 @@ Function GetPVSServiceInfo
 					{
 						Switch ($Item)
 						{
-							{$Item -like "*RESTART -- Delay*"}		{$cnt++; $obj1 | Add-Member -MemberType NoteProperty -Name $("FailureAction$($Cnt)")	-Value "Restart the Service"; Break}
-							{$Item -like "*RUN PROCESS -- Delay*"}	{$cnt++; $obj1 | Add-Member -MemberType NoteProperty -Name $("FailureAction$($Cnt)")	-Value "Run a Program"; Break}
-							{$Item -like "*REBOOT -- Delay*"}		{$cnt++; $obj1 | Add-Member -MemberType NoteProperty -Name $("FailureAction$($Cnt)")	-Value "Restart the Computer"; Break}
+							{$Item -like "*RESTART -- Delay*"}		{$cnt++; $obj1.$("FailureAction$($Cnt)") = "Restart the Service"; Break}
+							{$Item -like "*RUN PROCESS -- Delay*"}	{$cnt++; $obj1.$("FailureAction$($Cnt)") = "Run a Program"; Break}
+							{$Item -like "*REBOOT -- Delay*"}		{$cnt++; $obj1.$("FailureAction$($Cnt)") = "Restart the Computer"; Break}
 						}
 					}
-					
-					#added in V1.16 to handle where less than three failure actions are configured
-					#thanks to Martin Therkelsen for finding this logic flaw (bug)
-					Switch ($cnt) 
-					{
-						0 
-							{
-								$obj1 | Add-Member -MemberType NoteProperty -Name FailureAction1	-Value "Take no Action"
-								$obj1 | Add-Member -MemberType NoteProperty -Name FailureAction2	-Value "Take no Action"
-								$obj1 | Add-Member -MemberType NoteProperty -Name FailureAction3	-Value "Take no Action"
-								Break
-							}
-						
-						1
-							{
-								$obj1 | Add-Member -MemberType NoteProperty -Name FailureAction2	-Value "Take no Action"
-								$obj1 | Add-Member -MemberType NoteProperty -Name FailureAction3	-Value "Take no Action"
-								Break
-							}
-						
-						2
-							{
-								$obj1 | Add-Member -MemberType NoteProperty -Name FailureAction3	-Value "Take no Action"
-								Break
-							}
-						
-						3
-							{
-								#nothing to do
-								Break
-							}
-					}
-				}
-				Else
-				{
-					$obj1 | Add-Member -MemberType NoteProperty -Name FailureAction1	-Value "Take no Action"
-					$obj1 | Add-Member -MemberType NoteProperty -Name FailureAction2	-Value "Take no Action"
-					$obj1 | Add-Member -MemberType NoteProperty -Name FailureAction3	-Value "Take no Action"
 				}
 			}
 			
-			$Script:PVSServiceItems +=  $obj1
+			$null = $Script:PVSServiceItems.Add($obj1)
 		}
 	}
 	Else
@@ -2595,57 +2598,73 @@ Function GetPVSProcessInfo
 	$MgmtDaemonProcess = Get-Process -Name 'MgmtDaemon' -ComputerName $ComputerName
 	$StreamProcessProcess = Get-Process -Name 'StreamProcess' -ComputerName $ComputerName
 	
-	$obj1 = New-Object -TypeName PSObject
-	$obj1 | Add-Member -MemberType NoteProperty -Name ProcessName	-Value "Inventory"
-	$obj1 | Add-Member -MemberType NoteProperty -Name ServerName 	-Value $ComputerName
+	$tmp1 = ""
+	$tmp2 = ""
 	If($InventoryProcess)
 	{
-		$obj1 | Add-Member -MemberType NoteProperty -Name Status  		-Value "Running"
+		$tmp2 = "Running"
 	}
 	Else
 	{
-		$obj1 | Add-Member -MemberType NoteProperty -Name Status  		-Value "Not Running"
+		$tmp2 = "Not Running"
 	}
-	$Script:PVSProcessItems +=  $obj1
+	$obj1 = [PSCustomObject] @{
+		ProcessName	= $tmp1
+		ServerName 	= $ComputerName	
+		Status  	= $tmp2
+	}
+	$null = $Script:PVSProcessItems.Add($obj1)
 	
-	$obj1 = New-Object -TypeName PSObject
-	$obj1 | Add-Member -MemberType NoteProperty -Name ProcessName	-Value "Notifier"
-	$obj1 | Add-Member -MemberType NoteProperty -Name ServerName 	-Value $ComputerName
+	$tmp1 = ""
+	$tmp2 = ""
 	If($NotifierProcess)
 	{
-		$obj1 | Add-Member -MemberType NoteProperty -Name Status  		-Value "Running"
+		$tmp2 = "Running"
 	}
 	Else
 	{
-		$obj1 | Add-Member -MemberType NoteProperty -Name Status  		-Value "Not Running"
+		$tmp2 = "Not Running"
 	}
-	$Script:PVSProcessItems +=  $obj1
+	$obj1 = [PSCustomObject] @{
+		ProcessName	= $tmp1
+		ServerName 	= $ComputerName	
+		Status  	= $tmp2
+	}
+	$null = $Script:PVSProcessItems.Add($obj1)
 	
-	$obj1 = New-Object -TypeName PSObject
-	$obj1 | Add-Member -MemberType NoteProperty -Name ProcessName	-Value "MgmtDaemon"
-	$obj1 | Add-Member -MemberType NoteProperty -Name ServerName 	-Value $ComputerName
+	$tmp1 = ""
+	$tmp2 = ""
 	If($MgmtDaemonProcess)
 	{
-		$obj1 | Add-Member -MemberType NoteProperty -Name Status  		-Value "Running"
+		$tmp2 = "Running"
 	}
 	Else
 	{
-		$obj1 | Add-Member -MemberType NoteProperty -Name Status  		-Value "Not Running"
+		$tmp2 = "Not Running"
 	}
-	$Script:PVSProcessItems +=  $obj1
+	$obj1 = [PSCustomObject] @{
+		ProcessName	= $tmp1
+		ServerName 	= $ComputerName	
+		Status  	= $tmp2
+	}
+	$null = $Script:PVSProcessItems.Add($obj1)
 	
-	$obj1 = New-Object -TypeName PSObject
-	$obj1 | Add-Member -MemberType NoteProperty -Name ProcessName	-Value "StreamProcess"
-	$obj1 | Add-Member -MemberType NoteProperty -Name ServerName 	-Value $ComputerName
+	$tmp1 = ""
+	$tmp2 = ""
 	If($StreamProcessProcess)
 	{
-		$obj1 | Add-Member -MemberType NoteProperty -Name Status  		-Value "Running"
+		$tmp2 = "Running"
 	}
 	Else
 	{
-		$obj1 | Add-Member -MemberType NoteProperty -Name Status  		-Value "Not Running"
+		$tmp2 = "Not Running"
 	}
-	$Script:PVSProcessItems +=  $obj1
+	$obj1 = [PSCustomObject] @{
+		ProcessName	= $tmp1
+		ServerName 	= $ComputerName	
+		Status  	= $tmp2
+	}
+	$null = $Script:PVSProcessItems.Add($obj1)
 }
 
 Function GetBadStreamingIPAddresses
@@ -2672,10 +2691,11 @@ Function GetBadStreamingIPAddresses
 		}
 		if (!$exists) 
 		{
-			$obj1 = New-Object -TypeName PSObject
-			$obj1 | Add-Member -MemberType NoteProperty -Name ServerName 	-Value $ComputerName
-			$obj1 | Add-Member -MemberType NoteProperty -Name IPAddress		-Value $Stream.IPAddress
-			$Script:BadIPs += $obj1
+			$obj1 = [PSCustomObject] @{
+				ServerName = $ComputerName			
+				IPAddress  = $Stream.IPAddress			
+			}
+			$null = $Script:BadIPs.Add($obj1)
 		}
 	}
 }
@@ -2763,12 +2783,12 @@ Function ProcessvDisksinFarm
 						1   {
 								Line 0 "Cache on server"
 								
-								$obj1 = New-Object -TypeName PSObject
-								
-								$obj1 | Add-Member -MemberType NoteProperty -Name StoreName -Value $Disk.storeName
-								$obj1 | Add-Member -MemberType NoteProperty -Name SiteName  -Value $Disk.siteName
-								$obj1 | Add-Member -MemberType NoteProperty -Name vDiskName -Value $Disk.diskLocatorName
-								$Script:CacheOnServer +=  $obj1
+								$obj1 = [PSCustomObject] @{
+									StoreName = $Disk.storeName								
+									SiteName  = $Disk.siteName								
+									vDiskName = $Disk.diskLocatorName								
+								}
+								$null = $Script:CacheOnServer.Add($obj1)
 								Break
 							}
 						2   {Line 0 "Cache encrypted on server disk"; Break}
@@ -2875,12 +2895,12 @@ Function ProcessvDisksinFarm
 						1   {
 								Line 0 "Cache on server"
 								
-								$obj1 = New-Object -TypeName PSObject
-								
-								$obj1 | Add-Member -MemberType NoteProperty -Name StoreName -Value $Disk.storeName
-								$obj1 | Add-Member -MemberType NoteProperty -Name SiteName  -Value $Disk.siteName
-								$obj1 | Add-Member -MemberType NoteProperty -Name vDiskName -Value $Disk.diskLocatorName
-								$Script:CacheOnServer +=  $obj1
+								$obj1 = [PSCustomObject] @{
+									StoreName = $Disk.storeName								
+									SiteName  = $Disk.siteName								
+									vDiskName = $Disk.diskLocatorName								
+								}
+								$null = $Script:CacheOnServer.Add($obj1)
 								Break
 							}
 						3   {
@@ -3053,10 +3073,11 @@ Function ProcessvDisksinFarm
 							{
 								$VersionFlag = $True
 								Line 2 "Version of vDisk is $($DiskVersion.version) which is greater than the limit of $($Script:farm.maxVersions). Consider merging."
-								$obj1 = New-Object -TypeName PSObject
-								$obj1 | Add-Member -MemberType NoteProperty -Name vDiskName	-Value $Disk.diskLocatorName
-								$Script:VersionsToMerge += $obj1
 								
+								$obj1 = [PSCustomObject] @{
+									vDiskName = $Disk.diskLocatorName								
+								}
+								$null = $Script:VersionsToMerge.Add($obj1)
 							}
 							Line 2 "Created: " $DiskVersion.createDate
 							If(![String]::IsNullOrEmpty($DiskVersion.scheduledDate))
@@ -3243,14 +3264,15 @@ Function GetMicrosoftHotfixes
 	{
 		ForEach($Hotfix in $MSInstalledHotfixes)
 		{
-			$obj1 = New-Object -TypeName PSObject
-			$obj1 | Add-Member -MemberType NoteProperty -Name HotFixID		-Value $Hotfix.HotFixID
-			$obj1 | Add-Member -MemberType NoteProperty -Name ServerName	-Value $Hotfix.CSName
-			$obj1 | Add-Member -MemberType NoteProperty -Name Caption		-Value $Hotfix.Caption
-			$obj1 | Add-Member -MemberType NoteProperty -Name Description	-Value $Hotfix.Description
-			$obj1 | Add-Member -MemberType NoteProperty -Name InstalledBy	-Value $Hotfix.InstalledBy
-			$obj1 | Add-Member -MemberType NoteProperty -Name InstalledOn	-Value $Hotfix.InstalledOn
-			$Script:MSHotfixes.Add($obj1) > $Null
+			$obj1 = [PSCustomObject] @{
+				HotFixID	= $Hotfix.HotFixID			
+				ServerName	= $Hotfix.CSName			
+				Caption		= $Hotfix.Caption			
+				Description	= $Hotfix.Description			
+				InstalledBy	= $Hotfix.InstalledBy			
+				InstalledOn	= $Hotfix.InstalledOn			
+			}
+			$null = $Script:MSHotfixes.Add($obj1)
 		}
 	}
 }
@@ -3282,12 +3304,13 @@ Function GetInstalledRolesAndFeatures
 	{
 		ForEach($Component in $WinComponents)
 		{
-			$obj1 = New-Object -TypeName PSObject
-			$obj1 | Add-Member -MemberType NoteProperty -Name DisplayName	-Value $Component.DisplayName
-			$obj1 | Add-Member -MemberType NoteProperty -Name Name			-Value $Component.Name
-			$obj1 | Add-Member -MemberType NoteProperty -Name ServerName	-Value $ComputerName
-			$obj1 | Add-Member -MemberType NoteProperty -Name FeatureType	-Value $Component.FeatureType
-			$Script:WinInstalledComponents.Add($obj1) > $Null
+			$obj1 = [PSCustomObject] @{
+				DisplayName	= $Component.DisplayName			
+				Name		= $Component.Name			
+				ServerName	= $ComputerName			
+				FeatureType	= $Component.FeatureType			
+			}
+			$null = $Script:WinInstalledComponents.Add($obj1)
 		}
 	}
 }
@@ -3695,7 +3718,7 @@ Function OutputAppendixH
 Function ProcessvDisksWithNoAssociation
 {
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finding vDisks with no Target Device Associations"
-	$UnassociatedvDisks = @()
+	$UnassociatedvDisks = New-Object System.Collections.ArrayList
 	$GetWhat = "diskLocator"
 	$GetParam = ""
 	$ErrorTxt = "Disk Locator information"
@@ -3728,10 +3751,10 @@ Function ProcessvDisksWithNoAssociation
 			Else
 			{
 				#no device found that uses this vDisk
-				#$UnassociatedvDisks += $DiskLocator.diskLocatorName
-				$obj1 = New-Object -TypeName PSObject
-				$obj1 | Add-Member -MemberType NoteProperty -Name vDiskName	-Value $DiskLocator.diskLocatorName
-				$UnassociatedvDisks += $obj1
+				$obj1 = [PSCustomObject] @{
+					vDiskName = $DiskLocator.diskLocatorName				
+				}
+				$null = $UnassociatedvDisks.Add($obj1)
 			}
 		}
 		
@@ -4061,11 +4084,41 @@ Function OutputAppendixO
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
 }
 
+Function ShowScriptOptions
+{
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): AdminAddress       : $($AdminAddress)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): CSV                : $($CSV)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Domain             : $($Domain)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Filename1          : $($Script:filename1)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Folder             : $($Script:pwdpath)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): From               : $($From)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): PVS Farm Name      : $($Script:farm.farmName)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): PVS Version        : $($Script:PVSFullVersion)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Smtp Port          : $($SmtpPort)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Smtp Server        : $($SmtpServer)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Title              : $($Script:Title)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): To                 : $($To)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Use SSL            : $($UseSSL)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): User               : $($User)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): OS Detected        : $($Script:RunningOS)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): PoSH version       : $($Host.Version)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): PSCulture          : $($PSCulture)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): PSUICulture        : $($PSUICulture)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Script start       : $($Script:StartTime)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+}
+
 #script begins
 
 $script:startTime = get-date
 
-$global:output = ""
+# v1.17 - switch to using a StringBuilder for $global:Output
+[System.Text.StringBuilder] $global:Output = New-Object System.Text.StringBuilder( 16384 )
 
 Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Checking for McliPSSnapin"
 If(!(Check-NeededPSSnapins "McliPSSnapIn")){
@@ -4081,6 +4134,8 @@ VerifyPVSServices
 GetPVSVersion
 
 GetPVSFarm
+
+ShowScriptOptions
 
 ProcessPVSFarm
 
