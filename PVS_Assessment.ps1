@@ -138,7 +138,7 @@
 	NAME: PVS_Assessment.ps1
 	VERSION: 1.17
 	AUTHOR: Carl Webster, Sr. Solutions Architect at Choice Solutions (with a lot of help from BG a, now former, Citrix dev)
-	LASTEDIT: April 11, 2019
+	LASTEDIT: April 15, 2019
 #>
 
 
@@ -191,13 +191,18 @@ Param(
 #script created August 8, 2015
 #released to the community on February 2, 2016
 #
-#Version 1.17
+#Version 1.17 15-Apr-2019
 #	Added Function ShowScriptOptions to show Parameters and some script values at the start of the script
+#	Changed the output of Appendix N to match the sort order
+#	Fixed bug preventing text output for Appendix L
 #	If no AdminAddress is entered, retrieve the local computer's name from $env:ComputerName
+#	If either SQL server has an instance name, remove it before finding the IP address
 #	Replaced all PSObject with PSCustomObject
 #	Updated Function line to use the optimized function from MBS from the Active Directory doc script
 #		Rewrote Line to use StringBuilder for speed
 #	Updated help text and ReadMe
+#	Updated the output for Appendix K for very long registry keys, data, and values and to keep the output
+#		the same as the XA/XD documentation script V2.23
 #	Went to Set-StrictMode -Version Latest, from Version 2 and cleaned up all related errors
 #	
 #Version 1.16 9-Apr-2019
@@ -1056,7 +1061,7 @@ Function GetConfigWizardInfo
 		0 {$DHCPServices = "Microsoft DHCP"; Break}
 		1 {$DHCPServices = "Provisioning Services BOOTP service"; Break}
 		2 {$DHCPServices = "Other BOOTP or DHCP service"; Break}
-		Default {$DHCPServices = "Unable to determine DHCPServices: $($DHCPServiceValue)"; Break}
+		Default {$DHCPServices = "Unable to determine DHCPServices: $($DHCPServicesValue)"; Break}
 	}
 
 	If($DHCPServicesValue -eq 1073741824)
@@ -1078,7 +1083,7 @@ Function GetConfigWizardInfo
 			Default {$PXEServices = "Unable to determine PXEServices: $($PXEServiceValue)"; Break}
 		}
 	}
-	ELseIf($DHCPServicesValue -eq 1)
+	ElseIf($DHCPServicesValue -eq 1)
 	{
 		$PXEServices = "N/A"
 	}
@@ -1566,7 +1571,7 @@ Function SetupRemoting
 			Write-Host "Warning: " -Foreground White
 			Write-Host "Warning: Remoting to another PVS server was requested but this is not an elevated PowerShell session." -Foreground White
 			Write-Host "Warning: Using -AdminAddress requires the script be run from an elevated PowerShell session." -Foreground White
-			Write-Host "Warning: Please run the script from an elevated PowerShell session.  Script cannot continue" -Foreground White
+			Write-Host "Warning: Please run the script from an elevated PowerShell session. Script cannot continue" -Foreground White
 			Write-Host "Warning: " -Foreground White
 			Exit
 		}
@@ -1581,12 +1586,12 @@ Function SetupRemoting
 		{
 			If([System.String]::IsNullOrEmpty($Domain))
 			{
-				$Domain = Read-Host "Domain name for user is required.  Enter Domain name for user"
+				$Domain = Read-Host "Domain name for user is required. Enter Domain name for user"
 			}		
 
 			If([System.String]::IsNullOrEmpty($Password))
 			{
-				$Password = Read-Host "Password for user is required.  Enter password for user"
+				$Password = Read-Host "Password for user is required. Enter password for user"
 			}		
 			$error.Clear()
 			mcli-run SetupConnection -p server="$($AdminAddress)",user="$($User)",domain="$($Domain)",password="$($Password)"
@@ -1769,8 +1774,29 @@ Function ProcessPVSFarm
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing PVS Farm Information"
 
 	$LicenseServerIPAddress = Get-IPAddress $Script:farm.licenseServer #added in V1.16
-	$SQLServerIPAddress = Get-IPAddress $Script:farm.databaseServerName #added in V1.16
-	$FailoverSQLServerIPAddress = Get-IPAddress $Script:farm.failoverPartnerServerName #added in V1.16
+	
+	#V1.17 see if the database server names contain an instance name. If so, remove it
+	If($Script:farm.databaseServerName -like "*\*")
+	{
+		$tmpArray = $Script:farm.databaseServerName.Split("\")
+		$tmp = $tmpArray[0]
+		$SQLServerIPAddress = Get-IPAddress $tmp
+	}
+	Else
+	{
+		$SQLServerIPAddress = Get-IPAddress $Script:farm.databaseServerName #added in V1.16
+	}
+	
+	If($Script:farm.failoverPartnerServerName -like "*\*")
+	{
+		$tmpArray = $Script:farm.failoverPartnerServerName.Split("\")
+		$tmp = $tmpArray[0]
+		$FailoverSQLServerIPAddress = Get-IPAddress $tmp
+	}
+	Else
+	{
+		$FailoverSQLServerIPAddress = Get-IPAddress $Script:farm.failoverPartnerServerName #added in V1.16
+	}
 
 	#general tab
 	Line 0 "PVS Farm Name: " $Script:farm.farmName
@@ -2598,7 +2624,7 @@ Function GetPVSProcessInfo
 	$MgmtDaemonProcess = Get-Process -Name 'MgmtDaemon' -ComputerName $ComputerName
 	$StreamProcessProcess = Get-Process -Name 'StreamProcess' -ComputerName $ComputerName
 	
-	$tmp1 = ""
+	$tmp1 = "Inventory"
 	$tmp2 = ""
 	If($InventoryProcess)
 	{
@@ -2615,7 +2641,7 @@ Function GetPVSProcessInfo
 	}
 	$null = $Script:PVSProcessItems.Add($obj1)
 	
-	$tmp1 = ""
+	$tmp1 = "Notifier"
 	$tmp2 = ""
 	If($NotifierProcess)
 	{
@@ -2632,7 +2658,7 @@ Function GetPVSProcessInfo
 	}
 	$null = $Script:PVSProcessItems.Add($obj1)
 	
-	$tmp1 = ""
+	$tmp1 = "MgmtDaemon"
 	$tmp2 = ""
 	If($MgmtDaemonProcess)
 	{
@@ -2649,7 +2675,7 @@ Function GetPVSProcessInfo
 	}
 	$null = $Script:PVSProcessItems.Add($obj1)
 	
-	$tmp1 = ""
+	$tmp1 = "StreamProcess"
 	$tmp2 = ""
 	If($StreamProcessProcess)
 	{
@@ -3702,7 +3728,7 @@ Function OutputAppendixH
 	{
 		ForEach($Item in $Script:EmptyDeviceCollections)
 		{
-			Line 1 ( "{0,-50}" -f $Item )
+			Line 1 ( "{0,-50}" -f $Item.CollectionName )
 		}
 	}
 	Else
@@ -3796,7 +3822,7 @@ Function OutputAppendixI
 	
 		ForEach($Item in $vDisks)
 		{
-			Line 1 ( "{0,-40}" -f $Item )
+			Line 1 ( "{0,-40}" -f $Item.vDiskName )
 		}
 	}
 	Else
@@ -3863,8 +3889,9 @@ Function OutputAppendixK
 	Line 0 "These items may or may not be needed"
 	Line 0 "This Appendix is strictly for server comparison only"
 	Line 0 ""
-	Line 1 "Registry Key                                                      Registry Value                 Data            Server Name    " 
-	Line 1 "================================================================================================================================"
+	Line 1 "Registry Key                                                                                    Registry Value                                     Data                                                                                       Server Name    " 
+	Line 1 "============================================================================================================================================================================================================================================================="
+	#       12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345S12345678901234567890123456789012345678901234567890S123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890S123456789012345
 	
 	$Save = ""
 	$First = $True
@@ -3877,7 +3904,8 @@ Function OutputAppendixK
 				Line 0 ""
 			}
 
-			Line 1 ( "{0,-65} {1,-30} {2,-15} {3,-15}" -f $Item.RegKey, $Item.RegValue, $Item.Value, $Item.serverName )
+			Line 1 ( "{0,-95} {1,-50} {2,-90} {3,-15}" -f `
+			$Item.RegKey, $Item.RegValue, $Item.Value, $Item.serverName )
 			$Save = "$($Item.RegKey.ToString())$($Item.RegValue.ToString())"
 			If($First)
 			{
@@ -3910,7 +3938,7 @@ Function OutputAppendixL
 	Line 0 "Appendix L - vDisks Configured for Server Side-Caching"
 	Line 0 ""
 
-	If($Script:CacheOnServer -is [array] -and $Script:CacheOnServer.Count -gt 0)
+	If($Script:CacheOnServer)
 	{
 		Line 1 "Store Name                Site Name                 vDisk Name               "
 		Line 1 "============================================================================="
@@ -3999,25 +4027,25 @@ Function OutputAppendixN
 	
 	Line 0 "Appendix N - Windows Installed Components"
 	Line 0 ""
-	Line 1 "Display Name                                       Server Name     Name                           Feature Type   "
+	Line 1 "Display Name                                       Name                          Server Name      Feature Type   "
 	Line 1 "================================================================================================================="
-	#       12345678901234567890123456789012345678901234567890S123456789012345S123456789012345678901234567890S123456789012345
-	#       Graphical Management Tools and Infrastructure      XXXXXXXXXXXXXXX NET-Framework-45-Features      Role Service
-	#       50                                                 15              30                             15
+	#       12345678901234567890123456789012345678901234567890S123456789012345678901234567890123456789012345SS123456789012345
+	#       Graphical Management Tools and Infrastructure      NET-Framework-45-Features     XXXXXXXXXXXXXXX  Role Service
+	#       50                                                 30                            15               15
 	$Save = ""
 	$First = $True
 	If($Script:WinInstalledComponents)
 	{
 		ForEach($Item in $Script:WinInstalledComponents)
 		{
-			If(!$First -and $Save -ne "$($Item.DisplayName)")
+			If(!$First -and $Save -ne "$($Item.DisplayName)$($Item.Name)")
 			{
 				Line 0 ""
 			}
 
-			Line 1 ( "{0,-50} {1,-15} {2,-30} {3,-15}" -f `
-			$Item.DisplayName, $Item.ServerName, $Item.Name, $Item.FeatureType)
-			$Save = "$($Item.DisplayName)"
+			Line 1 ( "{0,-50} {1,-30} {2,-15} {3,-15}" -f `
+			$Item.DisplayName, $Item.Name, $Item.ServerName, $Item.FeatureType)
+			$Save = "$($Item.DisplayName)$($Item.Name)"
 			If($First)
 			{
 				$First = $False
