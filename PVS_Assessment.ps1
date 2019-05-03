@@ -136,9 +136,9 @@
 	No objects are output from this script.  This script creates a text file.
 .NOTES
 	NAME: PVS_Assessment.ps1
-	VERSION: 1.17
+	VERSION: 1.18
 	AUTHOR: Carl Webster, Sr. Solutions Architect at Choice Solutions (with a lot of help from BG a, now former, Citrix dev)
-	LASTEDIT: April 15, 2019
+	LASTEDIT: April 18, 2019
 #>
 
 
@@ -190,6 +190,10 @@ Param(
 #http://www.CarlWebster.com
 #script created August 8, 2015
 #released to the community on February 2, 2016
+#
+#Version 1.18 18-Apr-2019
+#	Fix bug reported by Johan Parlevliet 
+#		If either SQL server name has a port number, remove it before finding the IP address
 #
 #Version 1.17 15-Apr-2019
 #	Added Function ShowScriptOptions to show Parameters and some script values at the start of the script
@@ -1776,28 +1780,29 @@ Function ProcessPVSFarm
 	$LicenseServerIPAddress = Get-IPAddress $Script:farm.licenseServer #added in V1.16
 	
 	#V1.17 see if the database server names contain an instance name. If so, remove it
-	If($Script:farm.databaseServerName -like "*\*")
+	#V1.18 add test for port number - bug found by Johan Parlevliet 
+	#V1.18 see if the database server names contain a port number. If so, remove it
+	#V1.18 optimized code supplied by MBS
+	$dbServer = $Script:farm.databaseServerName
+	If( ( $inx = $dbServer.IndexOfAny( ',\' ) ) -ge 0 )
 	{
-		$tmpArray = $Script:farm.databaseServerName.Split("\")
-		$tmp = $tmpArray[0]
-		$SQLServerIPAddress = Get-IPAddress $tmp
+		#strip the instance name and/or port name, if present
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Removing '$( $dbServer.SubString( $inx ) )' from SQL server name to get IP address"
+		$dbServer = $dbServer.SubString( 0, $inx )
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): dbServer now '$dbServer'"
 	}
-	Else
-	{
-		$SQLServerIPAddress = Get-IPAddress $Script:farm.databaseServerName #added in V1.16
-	}
+	$SQLServerIPAddress = Get-IPAddress $dbServer #added in V1.16
 	
-	If($Script:farm.failoverPartnerServerName -like "*\*")
+	$dbServer = $Script:farm.failoverPartnerServerName
+	If( ( $inx = $dbServer.IndexOfAny( ',\' ) ) -ge 0 )
 	{
-		$tmpArray = $Script:farm.failoverPartnerServerName.Split("\")
-		$tmp = $tmpArray[0]
-		$FailoverSQLServerIPAddress = Get-IPAddress $tmp
+		#strip the instance name and/or port name, if present
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Removing '$( $dbServer.SubString( $inx ) )' from SQL server name to get IP address"
+		$dbServer = $dbServer.SubString( 0, $inx )
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): dbServer now '$dbServer'"
 	}
-	Else
-	{
-		$FailoverSQLServerIPAddress = Get-IPAddress $Script:farm.failoverPartnerServerName #added in V1.16
-	}
-
+	$FailoverSQLServerIPAddress = Get-IPAddress $dbServer #added in V1.16
+	
 	#general tab
 	Line 0 "PVS Farm Name: " $Script:farm.farmName
 	Line 0 "Version: " $Script:PVSFullVersion
@@ -1843,7 +1848,7 @@ Function ProcessPVSFarm
 	{
 		Line 0 "No"
 	}
-	Line 0 "Enable offLine database support: " -nonewline
+	Line 0 "Enable offline database support: " -nonewline
 	If($Script:farm.offlineDatabaseSupportEnabled -eq "1")
 	{
 		Line 0 "Yes"	
