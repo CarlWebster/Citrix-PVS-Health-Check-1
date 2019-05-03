@@ -4,6 +4,10 @@
 #@carlwebster on Twitter
 #http://www.CarlWebster.com
 
+#Version 1.18 18-Apr-2019
+#	Fix bug reported by Johan Parlevliet 
+#		If either SQL server name has a port number, remove it before finding the IP address
+
 #Version 1.17 15-Apr-2019
 #	Added Function ShowScriptOptions to show Parameters and some script values at the start of the script
 #	Changed the output of Appendix N to match the sort order
