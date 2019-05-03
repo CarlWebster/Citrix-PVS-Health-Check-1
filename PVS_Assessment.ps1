@@ -136,9 +136,9 @@
 	No objects are output from this script.  This script creates a text file.
 .NOTES
 	NAME: PVS_Assessment.ps1
-	VERSION: 1.18
+	VERSION: 1.19
 	AUTHOR: Carl Webster, Sr. Solutions Architect at Choice Solutions (with a lot of help from BG a, now former, Citrix dev)
-	LASTEDIT: April 18, 2019
+	LASTEDIT: May 3, 2019
 #>
 
 
@@ -190,6 +190,12 @@ Param(
 #http://www.CarlWebster.com
 #script created August 8, 2015
 #released to the community on February 2, 2016
+#
+#Version 1.19 3-May-2019
+#	Remove the following regkeys from analysis as they are for target devices, not PVS Servers 
+#		(thanks to Johan Parlevliet for pointing this out)
+#		HKLM:\SYSTEM\CurrentControlSet\Services\BNIStack\Parameters\SocketOpenRetryIntervalMS      
+#		HKLM:\SYSTEM\CurrentControlSet\Services\BNIStack\ParametersSocketOpenRetryLimit           
 #
 #Version 1.18 18-Apr-2019
 #	Fix bug reported by Johan Parlevliet 
@@ -1236,8 +1242,6 @@ Function GetMiscRegistryKeys
 	#HKLM:\SOFTWARE\Citrix\ProvisioningServices\StreamProcess          SkipBootMenu                   
 	#HKLM:\SOFTWARE\Citrix\ProvisioningServices\StreamProcess          SkipRIMS                       
 	#HKLM:\SOFTWARE\Citrix\ProvisioningServices\StreamProcess          SkipRIMSforPrivate             
-	#HKLM:\SYSTEM\CurrentControlSet\Services\BNIStack\Parameters       SocketOpenRetryIntervalMS      
-	#HKLM:\SYSTEM\CurrentControlSet\Services\BNIStack\Parameters       SocketOpenRetryLimit           
 	#HKLM:\SYSTEM\CurrentControlSet\Services\BNIStack\Parameters       WcHDNoIntermediateBuffering    
 	#HKLM:\SYSTEM\CurrentControlSet\services\BNIStack\Parameters       WcRamConfiguration             
 	#HKLM:\SYSTEM\CurrentControlSet\Services\BNIStack\Parameters       WcWarningIncrement             
@@ -1276,13 +1280,7 @@ Function GetMiscRegistryKeys
 	#https://support.citrix.com/article/CTX200233
 	Get-RegKeyToObject "HKLM:\SOFTWARE\Citrix\ProvisioningServices\StreamProcess" "SkipRIMSforPrivate" $ComputerName
 
-	#https://support.citrix.com/article/CTX136570
-	Get-RegKeyToObject "HKLM:\SYSTEM\CurrentControlSet\Services\BNIStack\Parameters" "SocketOpenRetryIntervalMS" $ComputerName
-
-	#https://support.citrix.com/article/CTX136570
-	Get-RegKeyToObject "HKLM:\SYSTEM\CurrentControlSet\Services\BNIStack\Parameters" "SocketOpenRetryLimit" $ComputerName
-
-	#https://support.citrix.com/article/CTX126042?_ga=1.42836768.408415398.1458651624
+	#https://support.citrix.com/article/CTX126042
 	Get-RegKeyToObject "HKLM:\SYSTEM\CurrentControlSet\Services\BNIStack\Parameters" "WcHDNoIntermediateBuffering" $ComputerName
 
 	#https://support.citrix.com/article/CTX139849
