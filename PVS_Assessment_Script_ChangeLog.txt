@@ -4,6 +4,12 @@
 #@carlwebster on Twitter
 #http://www.CarlWebster.com
 
+#Version 1.19 3-May-2019
+#	Remove the following regkeys from analysis as they are for target devices, not PVS Servers 
+#		(thanks to Johan Parlevliet for pointing this out)
+#		HKLM:\SYSTEM\CurrentControlSet\Services\BNIStack\Parameters\SocketOpenRetryIntervalMS      
+#		HKLM:\SYSTEM\CurrentControlSet\Services\BNIStack\ParametersSocketOpenRetryLimit           
+
 #Version 1.18 18-Apr-2019
 #	Fix bug reported by Johan Parlevliet 
 #		If either SQL server name has a port number, remove it before finding the IP address
