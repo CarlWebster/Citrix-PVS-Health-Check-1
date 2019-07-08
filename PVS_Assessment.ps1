@@ -136,9 +136,9 @@
 	No objects are output from this script.  This script creates a text file.
 .NOTES
 	NAME: PVS_Assessment.ps1
-	VERSION: 1.19
+	VERSION: 1.20
 	AUTHOR: Carl Webster, Sr. Solutions Architect at Choice Solutions (with a lot of help from BG a, now former, Citrix dev)
-	LASTEDIT: May 3, 2019
+	LASTEDIT: July 8, 2019
 #>
 
 
@@ -190,6 +190,14 @@ Param(
 #http://www.CarlWebster.com
 #script created August 8, 2015
 #released to the community on February 2, 2016
+#
+#Version 1.20 8-July-2019
+#	Added to Farm properties, Citrix Provisioning license type: On-Premises or Cloud (new to 1808)
+#	Added to vDisk properties, Accelerated Office Activation (new to 1906)
+#	Added to vDisk properties, updated Write Cache types (new to 1811)
+#		Private Image with Asynchronous IO
+#		Cache on server, persistent with Asynchronous IO
+#		Cache in device RAM with overflow on hard disk with Asynchronous IO
 #
 #Version 1.19 3-May-2019
 #	Remove the following regkeys from analysis as they are for target devices, not PVS Servers 
@@ -1821,6 +1829,34 @@ Function ProcessPVSFarm
 			Line 0 "No"
 		}
 	}
+	If($Script:PVSFullVersion -ge "7.19")
+	{
+		Line 0 "Citrix Provisioning license type" ""
+		If($farm.LicenseSKU -eq 2)
+		{
+			Line 1 "On-Premises: " "Yes"
+			Line 2 "Use Datacenter licenses for desktops if no Desktop licenses are available: " -nonewline
+			If($farm.licenseTradeUp -eq "1")
+			{
+				Line 0 "Yes"
+			}
+			Else
+			{
+				Line 0 "No"
+			}
+			Line 1 "Cloud: " "No"
+		}
+		Else
+		{
+			Line 1 "On-Premises: " "No"
+			Line 2 "Use Datacenter licenses for desktops if no Desktop licenses are available: No"
+			Line 1 "Cloud: " "Yes"
+		}
+	}
+	ElseIf($Script:PVSFullVersion -ge "7.13")
+	{
+		Line 1 "Use Datacenter licenses for desktops if no Desktop licenses are available: " $DatacenterLicense
+	}
 
 	Line 0 "Enable auto-add: " -nonewline
 	If($farm.autoAddEnabled -eq "1")
@@ -2939,7 +2975,11 @@ Function ProcessvDisksinFarm
 						4   {Line 0 "Cache on device's hard disk"; Break}
 						6   {Line 0 "RAM Disk"; Break}
 						7   {Line 0 "Difference Disk"; Break}
-						9   {Line 0 "Cache in device RAM with overflow on hard disk"; Break}
+						8  	{Line 0 "Cache on device hard drive persisted (NT 6.1 and later)"; Break}
+						9  	{Line 0 "Cache in device RAM with overflow on hard disk"; Break}
+						10 	{Line 0 "Private Image with Asynchronous IO"; Break} #added 1811
+						11 	{Line 0 "Cache on server, persistent with Asynchronous IO"; Break} #added 1811
+						12 	{Line 0 "Cache in device RAM with overflow on hard disk with Asynchronous IO"; Break} #added 1811
 						Default {Line 0 "Cache type could not be determined: $($Disk.writeCacheType)"; Break}
 					}
 				}
@@ -2986,6 +3026,17 @@ Function ProcessvDisksinFarm
 					1 {Line 0 "Multiple Activation Key (MAK)"; Break}
 					2 {Line 0 "Key Management Service (KMS)"; Break}
 					Default {Line 0 "Volume License Mode could not be determined: $($Disk.licenseMode)"; Break}
+				}
+				If($Script:PVSFullVersion -ge "7.22")
+				{
+					If($Disk.AccelerateOfficeActivation)
+					{
+						Line 2 "Accelerate Office Activation: Yes"
+					}
+					Else
+					{
+						Line 2 "Accelerate Office Activation: No"
+					}
 				}
 
 				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Auto Update Tab"
