@@ -138,7 +138,7 @@
 	NAME: PVS_Assessment.ps1
 	VERSION: 1.20
 	AUTHOR: Carl Webster, Sr. Solutions Architect at Choice Solutions (with a lot of help from BG a, now former, Citrix dev)
-	LASTEDIT: July 4, 2019
+	LASTEDIT: July 8, 2019
 #>
 
 
@@ -191,7 +191,7 @@ Param(
 #script created August 8, 2015
 #released to the community on February 2, 2016
 #
-#Version 1.20 5-July-2019
+#Version 1.20 8-July-2019
 #	Added to Farm properties, Citrix Provisioning license type: On-Premises or Cloud (new to 1808)
 #	Added to vDisk properties, Accelerated Office Activation (new to 1906)
 #	Added to vDisk properties, updated Write Cache types (new to 1811)
