@@ -170,26 +170,20 @@ Function GetComputerWMIInfo {
 
 	Write-Output -Message "Drive(s)"
 
-	Try
-	{
+	Try {
 		$Results = Get-WmiObject -ComputerName $RemoteComputerName Win32_LogicalDisk
 	}
-	
-	Catch
-	{
+	Catch {
 		$Results = $Null
 	}
 
-	if ($? -and $Null -ne $Results)
-	{
+	if ($? -and $Null -ne $Results) {
 		$drives = $Results | Select-Object caption, @{N="drivesize"; E={[math]::round(($_.size / 1GB),0)}}, 
 		filesystem, @{N="drivefreespace"; E={[math]::round(($_.freespace / 1GB),0)}}, 
 		volumename, drivetype, volumedirty, volumeserialnumber
 		$Results = $Null
-		ForEach($drive in $drives)
-		{
-			if ($drive.caption -ne "A:" -and $drive.caption -ne "B:")
-			{
+		ForEach($drive in $drives) {
+			if ($drive.caption -ne "A:" -and $drive.caption -ne "B:") {
 				OutputDriveItem $drive
 			}
 		}
@@ -211,23 +205,18 @@ Function GetComputerWMIInfo {
 
 	Write-Output -Message "Processor(s)"
 
-	Try
-	{
+	Try {
 		$Results = Get-WmiObject -ComputerName $RemoteComputerName win32_Processor
 	}
-	
-	Catch
-	{
+	Catch {
 		$Results = $Null
 	}
 
-	if ($? -and $Null -ne $Results)
-	{
+	if ($? -and $Null -ne $Results) {
 		$Processors = $Results | Select-Object availability, name, description, maxclockspeed, 
 		l2cachesize, l3cachesize, numberofcores, numberoflogicalprocessors
 		$Results = $Null
-		ForEach($processor in $processors)
-		{
+		ForEach($processor in $processors) {
 			OutputProcessorItem $processor
 		}
 	} elseif (!$?) {
@@ -249,11 +238,9 @@ Function GetComputerWMIInfo {
 
 	[bool]$GotNics = $True
 	
-	Try
-	{
+	Try {
 		$Results = Get-WmiObject -ComputerName $RemoteComputerName win32_networkadapterconfiguration
 	}
-	
 	Catch {
 		$Results = $Null
 	}
@@ -308,7 +295,7 @@ Function GetComputerWMIInfo {
 		Write-Output -Message "No results Returned for NIC configuration information"
 	}
 	
-	Line 0 ''
+	Write-Output -Message ''
 }
 
 Function OutputComputerItem
@@ -326,13 +313,11 @@ Function OutputComputerItem
 	Line 2 ''
 }
 
-Function OutputDriveItem
-{
+Function OutputDriveItem {
 	Param([object]$Drive)
 	
 	$xDriveType = ''
-	Switch ($drive.drivetype)
-	{
+	Switch ($drive.drivetype) {
 		0	{$xDriveType = "Unknown"; Break}
 		1	{$xDriveType = "No Root Directory"; Break}
 		2	{$xDriveType = "Removable Disk"; Break}
@@ -344,10 +329,8 @@ Function OutputDriveItem
 	}
 	
 	$xVolumeDirty = ''
-	if (![String]::IsNullOrEmpty($drive.volumedirty))
-	{
-		if ($drive.volumedirty)
-		{
+	if (![String]::IsNullOrEmpty($drive.volumedirty)) {
+		if ($drive.volumedirty) {
 			$xVolumeDirty = "Yes"
 		} else {
 			$xVolumeDirty = "No"
@@ -356,34 +339,33 @@ Function OutputDriveItem
 
 	Line 3 "Caption: " $drive.caption
 	Write-Output -Message "Size: $($drive.drivesize) GB"
-	if (![String]::IsNullOrEmpty($drive.filesystem))
-	{
+	
+	if (![String]::IsNullOrEmpty($drive.filesystem)) {
 		Line 3 "File System: " $drive.filesystem
 	}
+	
 	Write-Output -Message "Free Space: $($drive.drivefreespace) GB"
-	if (![String]::IsNullOrEmpty($drive.volumename))
-	{
+	
+	if (![String]::IsNullOrEmpty($drive.volumename)) {
 		Line 3 "Volume Name: " $drive.volumename
 	}
-	if (![String]::IsNullOrEmpty($drive.volumedirty))
-	{
+	
+	if (![String]::IsNullOrEmpty($drive.volumedirty)) {
 		Line 3 "Volume is Dirty: " $xVolumeDirty
 	}
-	if (![String]::IsNullOrEmpty($drive.volumeserialnumber))
-	{
+	
+	if (![String]::IsNullOrEmpty($drive.volumeserialnumber)) {
 		Line 3 "Volume Serial #: " $drive.volumeserialnumber
 	}
 	Line 3 "Drive Type: " $xDriveType
-	Line 3 ''
+	Write-Output -Message ''
 }
 
-Function OutputProcessorItem
-{
+Function OutputProcessorItem {
 	Param([object]$Processor)
 	
 	$xAvailability = ''
-	Switch ($processor.availability)
-	{
+	Switch ($processor.availability) {
 		1	{$xAvailability = "Other"; Break }
 		2	{$xAvailability = "Unknown"; Break }
 		3	{$xAvailability = "Running or Full Power"; Break }
@@ -407,44 +389,39 @@ Function OutputProcessorItem
 	Line 3 "Name: " $processor.name
 	Line 3 "Description: " $processor.description
 	Write-Output -Message "Max Clock Speed: $($processor.maxclockspeed) MHz"
-	if ($processor.l2cachesize -gt 0)
-	{
+	if ($processor.l2cachesize -gt 0) {
 		Write-Output -Message "L2 Cache Size: $($processor.l2cachesize) KB"
 	}
-	if ($processor.l3cachesize -gt 0)
-	{
+	
+	if ($processor.l3cachesize -gt 0) {
 		Write-Output -Message "L3 Cache Size: $($processor.l3cachesize) KB"
 	}
-	if ($processor.numberofcores -gt 0)
-	{
+	
+	if ($processor.numberofcores -gt 0) {
 		Line 3 "# of Cores: " $processor.numberofcores
 	}
-	if ($processor.numberoflogicalprocessors -gt 0)
-	{
+	
+	if ($processor.numberoflogicalprocessors -gt 0) {
 		Line 3 "# of Logical Procs (cores w/HT): " $processor.numberoflogicalprocessors
 	}
+	
 	Line 3 "Availability: " $xAvailability
-	Line 3 ''
+	Write-Output -Message ''
 }
 
-Function OutputNicItem
-{
+Function OutputNicItem {
 	Param([object]$Nic, [object]$ThisNic, [string] $ComputerName)
 	
 	#V1.16 change how $powerMgmt is retrieved
-	if (validObject $ThisNic PowerManagementSupported)
-	{
+	if (validObject $ThisNic PowerManagementSupported) {
 		$powerMgmt = $ThisNic.PowerManagementSupported
 	}
 	
-	if ($powerMgmt)
-	{
+	if ($powerMgmt) {
 		$powerMgmt = Get-WmiObject -ComputerName $ComputerName MSPower_DeviceEnable -Namespace root\wmi | Where-Object {$_.InstanceName -match [regex]::Escape($ThisNic.PNPDeviceID)}
 
-		if ($? -and $Null -ne $powerMgmt)
-		{
-			if ($powerMgmt.Enable -eq $True)
-			{
+		if ($? -and $Null -ne $powerMgmt) {
+			if ($powerMgmt.Enable -eq $True) {
 				$PowerSaving = "Enabled"
 			} else {
 				$PowerSaving = "Disabled"
@@ -455,11 +432,9 @@ Function OutputNicItem
 	} else {
 		$PowerSaving = "Not Supported"
 	}
-
 	
 	$xAvailability = ''
-	Switch ($processor.availability)
-	{
+	Switch ($processor.availability) {
 		1	{$xAvailability = "Other"; Break }
 		2	{$xAvailability = "Unknown"; Break }
 		3	{$xAvailability = "Running or Full Power"; Break }
@@ -481,12 +456,10 @@ Function OutputNicItem
 	}
 
 	$xIPAddresses = @()
-	ForEach($IPAddress in $Nic.ipaddress)
-	{
+	ForEach($IPAddress in $Nic.ipaddress) {
 		$xIPAddresses += "$($IPAddress)"
-		#$Script:NICIPAddresses.Add($ComputerName, $IPAddress)
-		if ($Script:NICIPAddresses.ContainsKey($ComputerName)) 
-		{
+		
+		if ($Script:NICIPAddresses.ContainsKey($ComputerName))  {
 			$MultiIP = @()
 			$MultiIP += $Script:NICIPAddresses.Item($ComputerName)
 			$MultiIP += $IPAddress
@@ -497,42 +470,35 @@ Function OutputNicItem
 	}
 
 	$xIPSubnet = @()
-	ForEach($IPSubnet in $Nic.ipsubnet)
-	{
+	ForEach($IPSubnet in $Nic.ipsubnet) {
 		$xIPSubnet += "$($IPSubnet)"
 	}
 
-	if ($Null -ne $nic.dnsdomainsuffixsearchorder -and $nic.dnsdomainsuffixsearchorder.length -gt 0)
-	{
+	if ($Null -ne $nic.dnsdomainsuffixsearchorder -and $nic.dnsdomainsuffixsearchorder.length -gt 0) {
 		$nicdnsdomainsuffixsearchorder = $nic.dnsdomainsuffixsearchorder
 		$xnicdnsdomainsuffixsearchorder = @()
-		ForEach($DNSDomain in $nicdnsdomainsuffixsearchorder)
-		{
+		ForEach($DNSDomain in $nicdnsdomainsuffixsearchorder) {
 			$xnicdnsdomainsuffixsearchorder += "$($DNSDomain)"
 		}
 	}
 	
-	if ($Null -ne $nic.dnsserversearchorder -and $nic.dnsserversearchorder.length -gt 0)
-	{
+	if ($Null -ne $nic.dnsserversearchorder -and $nic.dnsserversearchorder.length -gt 0) {
 		$nicdnsserversearchorder = $nic.dnsserversearchorder
 		$xnicdnsserversearchorder = @()
-		ForEach($DNSServer in $nicdnsserversearchorder)
-		{
+		ForEach($DNSServer in $nicdnsserversearchorder) {
 			$xnicdnsserversearchorder += "$($DNSServer)"
 		}
 	}
 
 	$xdnsenabledforwinsresolution = ''
-	if ($nic.dnsenabledforwinsresolution)
-	{
+	if ($nic.dnsenabledforwinsresolution) {
 		$xdnsenabledforwinsresolution = "Yes"
 	} else {
 		$xdnsenabledforwinsresolution = "No"
 	}
 	
 	$xTcpipNetbiosOptions = ''
-	Switch ($nic.TcpipNetbiosOptions)
-	{
+	Switch ($nic.TcpipNetbiosOptions) {
 		0	{$xTcpipNetbiosOptions = "Use NetBIOS setting from DHCP Server"; Break}
 		1	{$xTcpipNetbiosOptions = "Enable NetBIOS"; Break}
 		2	{$xTcpipNetbiosOptions = "Disable NetBIOS"; Break}
@@ -540,16 +506,14 @@ Function OutputNicItem
 	}
 	
 	$xwinsenablelmhostslookup = ''
-	if ($nic.winsenablelmhostslookup)
-	{
-		$xwinsenablelmhostslookup = "Yes"
+	if ($nic.winsenablelmhostslookup) {
+		$xwinsenablelmhostslookup = 'Yes'
 	} else {
-		$xwinsenablelmhostslookup = "No"
+		$xwinsenablelmhostslookup = 'No'
 	}
 
 	Line 3 "Name: " $ThisNic.Name
-	if ($ThisNic.Name -ne $nic.description)
-	{
+	if ($ThisNic.Name -ne $nic.description) {
 		Line 3 "Description: " $nic.description
 	}
 	Line 3 "Connection ID: " $ThisNic.NetConnectionID
@@ -559,27 +523,24 @@ Function OutputNicItem
 	Line 3 "Physical Address: " $nic.macaddress
 	Line 3 "IP Address: " $xIPAddresses[0]
 	$cnt = -1
-	ForEach($tmp in $xIPAddresses)
-	{
+	ForEach($tmp in $xIPAddresses) {
 		$cnt++
-		if ($cnt -gt 0)
-		{
+		if ($cnt -gt 0) {
 			Line 4 "    " $tmp
 		}
 	}
+	
 	Line 3 "Default Gateway: " $Nic.Defaultipgateway
 	Line 3 "Subnet Mask: " $xIPSubnet[0]
 	$cnt = -1
-	ForEach($tmp in $xIPSubnet)
-	{
+	ForEach($tmp in $xIPSubnet) {
 		$cnt++
-		if ($cnt -gt 0)
-		{
+		if ($cnt -gt 0) {
 			Line 4 "     " $tmp
 		}
 	}
-	if ($nic.dhcpenabled)
-	{
+	
+	if ($nic.dhcpenabled) {
 		$DHCPLeaseObtainedDate = $nic.ConvertToDateTime($nic.dhcpleaseobtained)
 		$DHCPLeaseExpiresDate = $nic.ConvertToDateTime($nic.dhcpleaseexpires)
 		Line 3 "DHCP Enabled: " $nic.dhcpenabled
@@ -587,64 +548,62 @@ Function OutputNicItem
 		Line 3 "DHCP Lease Expires: " $dhcpleaseexpiresdate
 		Line 3 "DHCP Server:" $nic.dhcpserver
 	}
-	if (![String]::IsNullOrEmpty($nic.dnsdomain))
-	{
+	
+	if (![String]::IsNullOrEmpty($nic.dnsdomain)) {
 		Line 3 "DNS Domain: " $nic.dnsdomain
 	}
-	if ($Null -ne $nic.dnsdomainsuffixsearchorder -and $nic.dnsdomainsuffixsearchorder.length -gt 0)
-	{
+	
+	if ($Null -ne $nic.dnsdomainsuffixsearchorder -and $nic.dnsdomainsuffixsearchorder.length -gt 0) {
 		[int]$x = 1
 		Line 3 "DNS Search Suffixes: " $xnicdnsdomainsuffixsearchorder[0]
 		$cnt = -1
-		ForEach($tmp in $xnicdnsdomainsuffixsearchorder)
-		{
+		ForEach ($tmp in $xnicdnsdomainsuffixsearchorder) {
 			$cnt++
-			if ($cnt -gt 0)
-			{
+			if ($cnt -gt 0) {
 				Line 4 "    " $tmp
 			}
 		}
 	}
+	
 	Line 3 "DNS WINS Enabled: " $xdnsenabledforwinsresolution
-	if ($Null -ne $nic.dnsserversearchorder -and $nic.dnsserversearchorder.length -gt 0)
-	{
+	
+	if ($Null -ne $nic.dnsserversearchorder -and $nic.dnsserversearchorder.length -gt 0) {
 		[int]$x = 1
 		Line 3 "DNS Servers: " $xnicdnsserversearchorder[0]
 		$cnt = -1
-		ForEach($tmp in $xnicdnsserversearchorder)
-		{
+		
+		ForEach($tmp in $xnicdnsserversearchorder) {
 			$cnt++
-			if ($cnt -gt 0)
-			{
+			if ($cnt -gt 0) {
 				Line 4 "     " $tmp
 			}
 		}
 	}
+	
 	Line 3 "NetBIOS Setting: " $xTcpipNetbiosOptions
 	Line 3 "Enabled LMHosts: " $xwinsenablelmhostslookup
-	if (![String]::IsNullOrEmpty($nic.winshostlookupfile))
-	{
+	
+	if (![String]::IsNullOrEmpty($nic.winshostlookupfile)) {
 		Line 3 "Host Lookup File: " $nic.winshostlookupfile
 	}
-	if (![String]::IsNullOrEmpty($nic.winsprimaryserver))
-	{
+	
+	if (![String]::IsNullOrEmpty($nic.winsprimaryserver)) {
 		Line 3 "Primary Server: " $nic.winsprimaryserver
 	}
-	if (![String]::IsNullOrEmpty($nic.winssecondaryserver))
-	{
+	
+	if (![String]::IsNullOrEmpty($nic.winssecondaryserver)) {
 		Line 3 "Secondary Server: " $nic.winssecondaryserver
 	}
-	if (![String]::IsNullOrEmpty($nic.winsscopeid))
-	{
+	
+	if (![String]::IsNullOrEmpty($nic.winsscopeid)) {
 		Line 3 "Scope ID: " $nic.winsscopeid
 	}
-	Line 0 ''
+	Write-Output -Message ''
 }
 #endregion
 
 #region email function
-Function SendEmail
-{
+Function SendEmail {
 	Param([string]$Attachments)
 	Write-Verbose -Message ('{0}: Prepare to email' -f (Get-Date -UFormat "%F %r (%Z)"))
 	$emailAttachment = $Attachments
@@ -656,8 +615,7 @@ $Script:Title is attached.
 "@ 
 
 	$error.Clear()
-	if ($UseSSL)
-	{
+	if ($UseSSL) {
 		Write-Verbose -Message ('{0}: Trying to send email using current user's credentials with SSL' -f (Get-Date -UFormat "%F %r (%Z)"))
 		Send-MailMessage -Attachments $emailAttachment -Body $emailBody -BodyAsHtml -From $From `
 		-Port $SmtpPort -SmtpServer $SmtpServer -Subject $emailSubject -To $To `
@@ -670,16 +628,14 @@ $Script:Title is attached.
 
 	$e = $error[0]
 
-	if ($e.Exception.ToString().Contains("5.7.57"))
-	{
+	if ($e.Exception.ToString().Contains("5.7.57")) {
 		#The server response was: 5.7.57 SMTP; Client was not authenticated to send anonymous mail during MAIL FROM
 		Write-Verbose -Message ('{0}: Current user's credentials failed. Ask for usable credentials.' -f (Get-Date -UFormat "%F %r (%Z)"))
 
 		$emailCredentials = Get-Credential -Message "Enter the email account and password to send email"
 
 		$error.Clear()
-		if ($UseSSL)
-		{
+		if ($UseSSL) {
 			Send-MailMessage -Attachments $emailAttachment -Body $emailBody -BodyAsHtml -From $From `
 			-Port $SmtpPort -SmtpServer $SmtpServer -Subject $emailSubject -To $To `
 			-UseSSL -credential $emailCredentials *>$Null 
@@ -691,8 +647,7 @@ $Script:Title is attached.
 
 		$e = $error[0]
 
-		if ($? -and $Null -eq $e)
-		{
+		if ($? -and $Null -eq $e) {
 			Write-Verbose -Message ('{0}: Email successfully sent using new credentials' -f (Get-Date -UFormat "%F %r (%Z)"))
 		} else {
 			Write-Verbose -Message ('{0}: Email was not sent:' -f (Get-Date -UFormat "%F %r (%Z)"))
@@ -705,8 +660,7 @@ $Script:Title is attached.
 }
 #endregion
 
-Function GetConfigWizardInfo
-{
+Function GetConfigWizardInfo {
 	Param([string]$ComputerName)
 	
 	$DHCPServicesValue = Get-RegistryValue "HKLM:\SOFTWARE\Citrix\ProvisioningServices\Wizard" "DHCPType" $ComputerName
@@ -715,8 +669,7 @@ Function GetConfigWizardInfo
 	$DHCPServices = ''
 	$PXEServices = ''
 
-	Switch ($DHCPServicesValue)
-	{
+	Switch ($DHCPServicesValue) {
 		1073741824 {$DHCPServices = "The service that runs on another computer"; Break}
 		0 {$DHCPServices = "Microsoft DHCP"; Break}
 		1 {$DHCPServices = "Provisioning Services BOOTP service"; Break}
@@ -724,17 +677,14 @@ Function GetConfigWizardInfo
 		Default {$DHCPServices = "Unable to determine DHCPServices: $($DHCPServicesValue)"; Break}
 	}
 
-	if ($DHCPServicesValue -eq 1073741824)
-	{
-		Switch ($PXEServiceValue)
-		{
+	if ($DHCPServicesValue -eq 1073741824) {
+		Switch ($PXEServiceValue) {
 			1073741824 {$PXEServices = "The service that runs on another computer"; Break}
 			0 {$PXEServices = "Provisioning Services PXE service"; Break}
 			Default {$PXEServices = "Unable to determine PXEServices: $($PXEServiceValue)"; Break}
 		}
 	} elseif ($DHCPServicesValue -eq 0) {
-		Switch ($PXEServiceValue)
-		{
+		Switch ($PXEServiceValue) {
 			1073741824 {$PXEServices = "The service that runs on another computer"; Break}
 			0 {$PXEServices = "Microsoft DHCP"; Break}
 			1 {$PXEServices = "Provisioning Services PXE service"; Break}
@@ -756,8 +706,7 @@ Function GetConfigWizardInfo
 	
 	$UserAccount = ''
 	
-	if ([String]::IsNullOrEmpty($UserAccount1Value) -and $UserAccount3Value -eq 1)
-	{
+	if ([String]::IsNullOrEmpty($UserAccount1Value) -and $UserAccount3Value -eq 1) {
 		$UserAccount = "NetWork Service"
 	} elseif ([String]::IsNullOrEmpty($UserAccount1Value) -and $UserAccount3Value -eq 0) {
 		$UserAccount = "Local system account"
@@ -768,8 +717,7 @@ Function GetConfigWizardInfo
 	$TFTPOptionValue = Get-RegistryValue "HKLM:\SOFTWARE\Citrix\ProvisioningServices\Wizard" "TFTPSetting" $ComputerName
 	$TFTPOption = ''
 	
-	if ($TFTPOptionValue -eq 1)
-	{
+	if ($TFTPOptionValue -eq 1) {
 		$TFTPOption = "Yes"
 		$TFTPBootstrapLocation = Get-RegistryValue "HKLM:\SOFTWARE\Citrix\ProvisioningServices\Admin" "Bootstrap" $ComputerName
 	} else {
