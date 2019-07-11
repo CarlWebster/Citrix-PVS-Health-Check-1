@@ -5,7 +5,7 @@
  Carl Webster, CTP and Sr. Solutions Architect at Choice Solutions
 
 - webster@carlwebster.com
-- [@carlwebster](twitter.com/carlwebster)
+- [@carlwebster](https://twitter.com/carlwebster)
 - http://www.CarlWebster.com
 
 ## Releases
