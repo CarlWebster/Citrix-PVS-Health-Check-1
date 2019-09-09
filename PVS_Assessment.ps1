@@ -136,9 +136,9 @@
 	No objects are output from this script.  This script creates a text file.
 .NOTES
 	NAME: PVS_Assessment.ps1
-	VERSION: 1.20
+	VERSION: 1.21
 	AUTHOR: Carl Webster, Sr. Solutions Architect at Choice Solutions (with a lot of help from BG a, now former, Citrix dev)
-	LASTEDIT: July 8, 2019
+	LASTEDIT: September 9, 2019
 #>
 
 
@@ -191,7 +191,10 @@ Param(
 #script created August 8, 2015
 #released to the community on February 2, 2016
 #
-#Version 1.20 8-July-2019
+#Version 1.21 9-Sep-2019
+#	Fix incorrect LicenseSKU value for PVS version 7.19 and later
+
+#Version 1.20 8-Jul-2019
 #	Added to Farm properties, Citrix Provisioning license type: On-Premises or Cloud (new to 1808)
 #	Added to vDisk properties, Accelerated Office Activation (new to 1906)
 #	Added to vDisk properties, updated Write Cache types (new to 1811)
@@ -1842,7 +1845,7 @@ Function ProcessPVSFarm
 	If($Script:PVSFullVersion -ge "7.19")
 	{
 		Line 0 "Citrix Provisioning license type" ""
-		If($farm.LicenseSKU -eq 2)
+		If($farm.LicenseSKU -eq 0)  #fix in 1.21 uint LicenseSKU: LicenseSKU. 0 for on-premises, 1 for cloud. Min=0, Max=1, Default=0
 		{
 			Line 1 "On-Premises: " "Yes"
 			Line 2 "Use Datacenter licenses for desktops if no Desktop licenses are available: " -nonewline
@@ -1856,11 +1859,15 @@ Function ProcessPVSFarm
 			}
 			Line 1 "Cloud: " "No"
 		}
-		Else
+		ElseIf($farm.LicenseSKU -eq 1)
 		{
 			Line 1 "On-Premises: " "No"
 			Line 2 "Use Datacenter licenses for desktops if no Desktop licenses are available: No"
 			Line 1 "Cloud: " "Yes"
+		}
+		Else
+		{
+			Line 1 "On-Premises: " "ERROR: Unable to determine the PVS License SKU Tpe"
 		}
 	}
 	ElseIf($Script:PVSFullVersion -ge "7.13")

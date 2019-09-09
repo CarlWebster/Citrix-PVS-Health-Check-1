@@ -4,6 +4,9 @@
 #@carlwebster on Twitter
 #http://www.CarlWebster.com
 
+#Version 1.21 9-Sep-2019
+#	Fix incorrect LicenseSKU value for PVS version 7.19 and later
+
 #Version 1.20 8-July-2019
 #	Added to Farm properties, Citrix Provisioning license type: On-Premises or Cloud (new to 1808)
 #	Added to vDisk properties, Accelerated Office Activation (new to 1906)
