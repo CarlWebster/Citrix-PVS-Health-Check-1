@@ -227,7 +227,7 @@
 	NAME: PVS_HealthCheck.ps1
 	VERSION: 1.22
 	AUTHOR: Carl Webster (with a lot of help from BG a, now former, Citrix dev)
-	LASTEDIT: April 24, 2020
+	LASTEDIT: April 26, 2020
 #>
 
 
@@ -282,7 +282,7 @@ Param(
 	)
 
 
-#Carl Webster, CTP and Sr. Solutions Architect at Choice Solutions
+#Carl Webster, CTP
 #webster@carlwebster.com
 #@carlwebster on Twitter
 #http://www.CarlWebster.com
@@ -293,6 +293,7 @@ Param(
 #Version 1.22
 #	Add -Dev, -Log, and -ScriptInfo parameters
 #	Add Function ProcessScriptEnd
+#	Add Receive Side Scaling setting to Function OutputNICInfo
 #	Attempt to automatically register the old string-based PowerShell snapins (Thanks to Guy Leech for the push)
 #		The script should be run from an elevated PowerShell session.
 #	Change output file names from "assessment" to "HealthCheck"
@@ -2344,6 +2345,28 @@ Function OutputNicItem
 		Default	{$xAvailability = "Unknown"; Break}
 	}
 
+	#attempt to get Receive Side Scaling setting
+	$RSSEnabled = "N/A"
+	Try
+	{
+		#https://ios.developreference.com/article/10085450/How+do+I+enable+VRSS+(Virtual+Receive+Side+Scaling)+for+a+Windows+VM+without+relying+on+Enable-NetAdapterRSS%3F
+		$RSSEnabled = (Get-WmiObject -ComputerName $RemoteComputerName MSFT_NetAdapterRssSettingData -Namespace "root\StandardCimV2" -ea 0).Enabled
+
+		If($RSSEnabled)
+		{
+			$rssenabled = "Enabled"
+		}
+		ELse
+		{
+			$rssenabled = "Disabled"
+		}
+	}
+	
+	Catch
+	{
+		$RSSEnabled = "Not available on $Script:RunningOS"
+	}
+	
 	$xIPAddress = @()
 	ForEach($IPAddress in $Nic.ipaddress)
 	{
@@ -2414,6 +2437,7 @@ Function OutputNicItem
 	Line 3 "Manufacturer: " $ThisNic.manufacturer
 	Line 3 "Availability: " $xAvailability
     Line 3 "Allow the computer to turn off this device to save power: " $PowerSaving
+	Line 3 "Receive Side Scaling: " $RSSEnabled
 	Line 3 "Physical Address: " $nic.macaddress
 	Line 3 "IP Address: " $xIPAddress[0]
 	$cnt = -1

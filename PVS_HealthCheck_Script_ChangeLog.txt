@@ -7,6 +7,7 @@
 #Version 1.22
 #	Add -Dev, -Log, and -ScriptInfo parameters
 #	Add Function ProcessScriptEnd
+#	Add Receive Side Scaling setting to Function OutputNICInfo
 #	Attempt to automatically register the old string-based PowerShell snapins (Thanks to Guy Leech for the push)
 #		The script should be run from an elevated PowerShell session.
 #	Change output file names from "assessment" to "HealthCheck"
