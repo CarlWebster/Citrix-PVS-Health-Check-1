@@ -227,7 +227,7 @@
 	NAME: PVS_HealthCheck.ps1
 	VERSION: 1.22
 	AUTHOR: Carl Webster (with a lot of help from BG a, now former, Citrix dev)
-	LASTEDIT: April 26, 2020
+	LASTEDIT: April 27, 2020
 #>
 
 
@@ -291,23 +291,37 @@ Param(
 #
 
 #Version 1.22
-#	Add -Dev, -Log, and -ScriptInfo parameters
+#	Add -Dev, -Log, and -ScriptInfo parameters (Thanks to Guy Leech for the push)
 #	Add Function ProcessScriptEnd
-#	Add Receive Side Scaling setting to Function OutputNICInfo
+#	Add Receive Side Scaling setting to Function OutputNICItem
 #	Attempt to automatically register the old string-based PowerShell snapins (Thanks to Guy Leech for the push)
 #		The script should be run from an elevated PowerShell session.
-#	Change output file names from "assessment" to "HealthCheck"
+#	Change location of the -Dev, -Log, and -ScriptInfo output files from the script folder to the -Folder location (Thanks to Guy Leech for the "suggestion")#	Change output file names from "assessment" to "HealthCheck"
 #	Cleaned up and reorganized the code
+#	Fix determining Bad Streaming IP addresses (Guy Leech magic pixie dust fix)
+#		Array was initialized but never populated
+#		The Management IP is not available for PVS versions earlier than 7.0
+#		Update Functions ProcessPVSSite and OutputAppendixJ
+#	Fix wrong variable name in Function OutputAppendixG (another Guy Leech find)
+#	Fix wrong variable name in Function VerifyPVSSOAPService (Thanks to Guy Leech for finding this)
 #	Reformatted the Write-Error messages to make them more visible and readable in the console
 #	Remove an invalid test for PVS license that bombed on Server 2008 R2 and PVS 6.x
 #	Remove Function validObject
 #	Remove the SMTP parameterset and manually verify the parameters
 #	Rename script from PVS_Assessment to PVS_HealthCheck
 #	Update Function BuildPVSObject by adding Try/Catch to catch stuff that isn't working in a current version of PVS
+#	Update Function Get-RegistryValue to add Try/Catch to catch registry values that don't exist on older versions of PVS
+#	Update Function ProcessStores to fix several issues:
+#		Using code from Guy Leech, work when run remotely
+#		Process the Store path validation for all servers that offer the Store
+#		Change the output text for Store path validation
+#		Process the Write Cache Path validation for all servers that offer the Store
+#		Change the output text for Store Write Cache Path validation
+#		Add text showing if the default Write Cache Path is used and the name of the default location
 #	Update Function SendEmail to handle anonymous unauthenticated email
 #	Update Function ShowScriptOptions for new parameters
-#	Update Functions GetInstalledRolesAndFeatures and OutputAppendixN to skip Server 2008 R2 
-#		as the Get-WindowsFeature cmdlet doesn't have the -ComputerName parameter
+#	Update Function VerifyPVSServices with suggestions from Guy Leech
+#	Update Functions GetInstalledRolesAndFeatures and OutputAppendixN to skip Server 2008 R2 as the Get-WindowsFeature cmdlet doesn't have the -ComputerName parameter
 #	Update Functions GetComputerWMIInfo and OutputNicInfo to fix two bugs in NIC Power Management settings
 #	Update Help Text
 
@@ -618,7 +632,18 @@ Function SetupRemoting
 #region verify PVS services
 Function VerifyPVSServices
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Verifying PVS SOAP and Stream Services are running"
+	If($AdminAddress -eq "")
+	{
+		$tmp = $env:ComputerName
+		Write-Verbose "$(Get-Date): Server name changed from localhost to $tmp"
+	}
+	Else
+	{
+		$tmp = $AdminAddress
+	}
+	
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Verifying PVS SOAP and Stream Services are running on $tmp"
+
 	$soapserver = $Null
 	$StreamService = $Null
 
@@ -633,48 +658,66 @@ Function VerifyPVSServices
 		$StreamService = Get-Service -EA 0 | Where-Object {$_.DisplayName -like "*Citrix PVS Stream Service*"}
 	}
 
-	If($soapserver.Status -ne "Running")
+	If($Null -eq $soapserver)
 	{
-		If($Script:Remoting)
-		{
-			Write-Warning "The Citrix PVS Soap Server service is not Started on server $($AdminAddress)"
-		}
-		Else
-		{
-			Write-Warning "The Citrix PVS Soap Server service is not Started"
-		}
 		Write-Error "
 		`n`n
 		`t`t
-		Script cannot continue.
+		The Citrix PVS Soap Server service status on $tmp could not be determined.
 		`n`n
 		`t`t
-		See message above.
+		Script cannot continue.
 		`n`n
 		"
 		Exit
 	}
-
-	If($StreamService.Status -ne "Running")
+	Else
 	{
-		If($Script:Remoting)
+		If($soapserver.Status -ne "Running")
 		{
-			Write-Warning "The Citrix PVS Stream Service service is not Started on server $($AdminAddress)"
+			$txt = "The Citrix PVS Soap Server service is not Started on server $tmp"
+			Write-Error "
+			`n`n
+			`t`t
+			$txt
+			`n`n
+			`t`t
+			Script cannot continue.
+			`n`n
+			"
+			Exit
 		}
-		Else
-		{
-			Write-Warning "The Citrix PVS Stream Service service is not Started"
-		}
+	}
+
+	If($Null -eq $StreamService)
+	{
 		Write-Error "
+		`n`n
+		`t`t
+		The Citrix PVS Stream Service service status on $tmp could not be determined.
 		`n`n
 		`t`t
 		Script cannot continue.
 		`n`n
-		`t`t
-		See message above.
-		`n`n
 		"
 		Exit
+	}
+	Else
+	{
+		If($StreamService.Status -ne "Running")
+		{
+			$txt = "The Citrix PVS Stream Service service is not Started on server $tmp"
+			Write-Error "
+			`n`n
+			`t`t
+			$txt
+			`n`n
+			`t`t
+			Script cannot continue.
+			`n`n
+			"
+			Exit
+		}
 	}
 }
 #endregion
@@ -758,21 +801,6 @@ Function GetPVSFarm
 Function SetFileName1
 {
 	Param([string]$OutputFileName)
-	If($Folder -eq "")
-	{
-		$Script:pwdpath = $pwd.Path
-	}
-	Else
-	{
-		$Script:pwdpath = $Folder
-	}
-
-	If($Script:pwdpath.EndsWith("\"))
-	{
-		#remove the trailing \
-		$Script:pwdpath = $Script:pwdpath.SubString(0, ($Script:pwdpath.Length - 1))
-	}
-
 	[string]$Script:FileName1 = "$($Script:pwdpath)\$($OutputFileName).txt"
 }
 #endregion
@@ -1135,6 +1163,11 @@ Function ProcessPVSSite
 						If($Script:PVSVersion -eq "7")
 						{
 							Line 2 "Management IP: " $Server.managementIp
+							$obj1 = [PSCustomObject] @{
+								ServerName = $Server.serverName							
+								IPAddress  = $Server.managementIp
+							}
+							$Script:NICIPAddresses.Add( $Server.serverName, $Server.managementIp )
 						}
 							
 						#create array for appendix A
@@ -1418,7 +1451,7 @@ Function VerifyPVSSOAPService
 	Param([string]$PVSServer='')
 	
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Verifying server $($PVSServer) is online"
-	If(Test-Connection -ComputerName $server.servername -quiet -EA 0)
+	If(Test-Connection -ComputerName $PVSServer -quiet -EA 0)
 	{
 
 		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Verifying PVS SOAP Service is running on server $($PVSServer)"
@@ -1801,78 +1834,141 @@ Function GetPVSProcessInfo
 
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing PVS Processes for Server $($server.servername)"
 
-	$InventoryProcess = Get-Process -Name 'Inventory' -ComputerName $ComputerName
-	$NotifierProcess = Get-Process -Name 'Notifier' -ComputerName $ComputerName
-	$MgmtDaemonProcess = Get-Process -Name 'MgmtDaemon' -ComputerName $ComputerName
-	$StreamProcessProcess = Get-Process -Name 'StreamProcess' -ComputerName $ComputerName
+	Try
+	{
+		$InventoryProcess = Get-Process -Name 'Inventory' -ComputerName $ComputerName
+
+		$tmp1 = "Inventory"
+		$tmp2 = ""
+		If($InventoryProcess)
+		{
+			$tmp2 = "Running"
+		}
+		Else
+		{
+			$tmp2 = "Not Running"
+		}
+		$obj1 = [PSCustomObject] @{
+			ProcessName	= $tmp1
+			ServerName 	= $ComputerName	
+			Status  	= $tmp2
+		}
+		$null = $Script:PVSProcessItems.Add($obj1)
+	}
 	
-	$tmp1 = "Inventory"
-	$tmp2 = ""
-	If($InventoryProcess)
+	Catch
 	{
-		$tmp2 = "Running"
+		$tmp1 = "Inventory"
+		$tmp2 = "Unable to retrieve"
+		$obj1 = [PSCustomObject] @{
+			ProcessName	= $tmp1
+			ServerName 	= $ComputerName	
+			Status  	= $tmp2
+		}
+		$null = $Script:PVSProcessItems.Add($obj1)
 	}
-	Else
-	{
-		$tmp2 = "Not Running"
-	}
-	$obj1 = [PSCustomObject] @{
-		ProcessName	= $tmp1
-		ServerName 	= $ComputerName	
-		Status  	= $tmp2
-	}
-	$null = $Script:PVSProcessItems.Add($obj1)
 	
-	$tmp1 = "Notifier"
-	$tmp2 = ""
-	If($NotifierProcess)
+	Try
 	{
-		$tmp2 = "Running"
+		$NotifierProcess = Get-Process -Name 'Notifier' -ComputerName $ComputerName
+
+		$tmp1 = "Notifier"
+		$tmp2 = ""
+		If($NotifierProcess)
+		{
+			$tmp2 = "Running"
+		}
+		Else
+		{
+			$tmp2 = "Not Running"
+		}
+		$obj1 = [PSCustomObject] @{
+			ProcessName	= $tmp1
+			ServerName 	= $ComputerName	
+			Status  	= $tmp2
+		}
+		$null = $Script:PVSProcessItems.Add($obj1)
 	}
-	Else
-	{
-		$tmp2 = "Not Running"
-	}
-	$obj1 = [PSCustomObject] @{
-		ProcessName	= $tmp1
-		ServerName 	= $ComputerName	
-		Status  	= $tmp2
-	}
-	$null = $Script:PVSProcessItems.Add($obj1)
 	
-	$tmp1 = "MgmtDaemon"
-	$tmp2 = ""
-	If($MgmtDaemonProcess)
+	Catch
 	{
-		$tmp2 = "Running"
+		$tmp1 = "Notifier"
+		$tmp2 = "Unable to retrieve"
+		$obj1 = [PSCustomObject] @{
+			ProcessName	= $tmp1
+			ServerName 	= $ComputerName	
+			Status  	= $tmp2
+		}
+		$null = $Script:PVSProcessItems.Add($obj1)
 	}
-	Else
-	{
-		$tmp2 = "Not Running"
-	}
-	$obj1 = [PSCustomObject] @{
-		ProcessName	= $tmp1
-		ServerName 	= $ComputerName	
-		Status  	= $tmp2
-	}
-	$null = $Script:PVSProcessItems.Add($obj1)
 	
-	$tmp1 = "StreamProcess"
-	$tmp2 = ""
-	If($StreamProcessProcess)
+	Try
 	{
-		$tmp2 = "Running"
+		$MgmtDaemonProcess = Get-Process -Name 'MgmtDaemon' -ComputerName $ComputerName
+	
+		$tmp1 = "MgmtDaemon"
+		$tmp2 = ""
+		If($MgmtDaemonProcess)
+		{
+			$tmp2 = "Running"
+		}
+		Else
+		{
+			$tmp2 = "Not Running"
+		}
+		$obj1 = [PSCustomObject] @{
+			ProcessName	= $tmp1
+			ServerName 	= $ComputerName	
+			Status  	= $tmp2
+		}
+		$null = $Script:PVSProcessItems.Add($obj1)
 	}
-	Else
+	
+	Catch
 	{
-		$tmp2 = "Not Running"
+		$tmp1 = "MgmtDaemon"
+		$tmp2 = "Unable to retrieve"
+		$obj1 = [PSCustomObject] @{
+			ProcessName	= $tmp1
+			ServerName 	= $ComputerName	
+			Status  	= $tmp2
+		}
+		$null = $Script:PVSProcessItems.Add($obj1)
 	}
-	$obj1 = [PSCustomObject] @{
-		ProcessName	= $tmp1
-		ServerName 	= $ComputerName	
-		Status  	= $tmp2
+	
+	Try
+	{
+		$StreamProcessProcess = Get-Process -Name 'StreamProcess' -ComputerName $ComputerName
+	
+		$tmp1 = "StreamProcess"
+		$tmp2 = ""
+		If($StreamProcessProcess)
+		{
+			$tmp2 = "Running"
+		}
+		Else
+		{
+			$tmp2 = "Not Running"
+		}
+		$obj1 = [PSCustomObject] @{
+			ProcessName	= $tmp1
+			ServerName 	= $ComputerName	
+			Status  	= $tmp2
+		}
+		$null = $Script:PVSProcessItems.Add($obj1)
 	}
-	$null = $Script:PVSProcessItems.Add($obj1)
+	
+	Catch
+	{
+		$tmp1 = "StreamProcess"
+		$tmp2 = "Unable to retrieve"
+		$obj1 = [PSCustomObject] @{
+			ProcessName	= $tmp1
+			ServerName 	= $ComputerName	
+			Status  	= $tmp2
+		}
+		$null = $Script:PVSProcessItems.Add($obj1)
+	}
 }
 
 Function GetBadStreamingIPAddresses
@@ -3111,14 +3207,14 @@ Function ProcessStores
 					$GetParam = "serverName = $Temp"
 					$ErrorTxt = "Server Store information"
 					$ServerStore = BuildPVSObject $GetWhat $GetParam $ErrorTxt
-                    $Providers = $ServerStore | Where-Object {$_.StoreName -eq $Store.Storename}
-                    If($Providers)
+					$Providers = $ServerStore | Where-Object {$_.StoreName -eq $Store.Storename}
+					If($Providers)
 					{
-                       ForEach ($Provider in $Providers)
-					   {
-                          $StoreServers += $Provider.ServerName
-                       }
-                    }
+						ForEach ($Provider in $Providers)
+						{
+							$StoreServers += $Provider.ServerName
+						}
+					}
 				}	
 			}
 			Line 2 "Servers that provide this store:"
@@ -3130,31 +3226,49 @@ Function ProcessStores
 			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Paths Tab"
 			Line 1 "Paths"
 
-			If(Test-Path $Store.path -EA 0)
+			#Run through the servers again and test each one for the path
+			ForEach ($StoreServer in $StoreServers)
 			{
-				Line 2 "Default store path: $($Store.path)"
+				#next line from Guy Leech
+				If(Invoke-Command -ComputerName $StoreServer `
+				-ScriptBlock { Param( [string]$path ) ; `
+				Test-Path -Path $path -PathType Container -ErrorAction SilentlyContinue } `
+				-ArgumentList $store.path)
+				{
+					Line 2 "Default store path: $($Store.path) on server $StoreServer is valid"
+				}
+				Else
+				{
+					Line 2 "Default store path: $($Store.path) on server $StoreServer is not valid"
+				}
 			}
-			Else
-			{
-				Line 2 "Default store path: $($Store.path) (Invalid path)"
-			}
-			
+
 			If(![String]::IsNullOrEmpty($Store.cachePath))
 			{
 				Line 2 "Default write-cache paths: "
 				$WCPaths = @($Store.cachePath.Split(","))
-				ForEach($WCPath in $WCPaths)
+				ForEach($StoreServer in $StoreServers)
 				{
-					If(Test-Path $WCPath -EA 0)
+					ForEach($WCPath in $WCPaths)
 					{
-						Line 3 $WCPath
+						#next line from Guy Leech
+						If(Invoke-Command -ComputerName $StoreServer `
+						-ScriptBlock { Param( [string]$path ) ; `
+						Test-Path -Path $path -PathType Container -ErrorAction SilentlyContinue } `
+						-ArgumentList $WCPath)
+						{
+							Line 3 "Write Cache Path $($WCPath) on server $StoreServer is valid" 
+						}
+						Else
+						{
+							Line 3 "Write Cache Path $($WCPath) on server $StoreServer is not valid" 
+						}
 					}
-					Else
-					{
-						Line 3 "$($WCPath) (Invalid path)"
-					}
-					#Line 3 $WCPath
 				}
+			}
+			Else
+			{
+				Line 2 "Using the default write-cache path of $($Store.Path)\WriteCache"
 			}
 			Line 0 ""
 		}
@@ -3445,7 +3559,7 @@ Function OutputAppendixG
 	{
 		ForEach($Item in $Script:VersionsToMerge)
 		{
-			Line 1 ( "{0,-40}" -f $Item )
+			Line 1 ( "{0,-40}" -f $Item.vDiskName )
 		}
 	}
 	Else
@@ -3608,19 +3722,26 @@ Function OutputAppendixJ
 	
 	Line 0 "Appendix J - Bad Streaming IP Addresses"
 	Line 0 "Streaming IP addresses that do not exist on the server"
-	Line 0 ""
-	Line 1 "Server Name      Streaming IP Address" 
-	Line 1 "====================================="
-	If($Script:BadIPs) 
+	If($Script:PVSVersion -eq "7")
 	{
-		ForEach($Item in $Script:BadIPs)
+		Line 0 ""
+		Line 1 "Server Name      Streaming IP Address" 
+		Line 1 "====================================="
+		If($Script:BadIPs) 
 		{
-			Line 1 ( "{0,-16} {1,-16}" -f $Item.serverName, $Item.IPAddress )
+			ForEach($Item in $Script:BadIPs)
+			{
+				Line 1 ( "{0,-16} {1,-16}" -f $Item.serverName, $Item.IPAddress )
+			}
+		}
+		Else
+		{
+			Line 1 "<None found>"
 		}
 	}
 	Else
 	{
-		Line 1 "<None found>"
+		Line 1 "Unable to determine Bad Streaming IP Addresses for PVS versions earlier than 7.0"
 	}
 	Line 0 ""
 
@@ -3965,7 +4086,7 @@ Function ProcessScriptEnd
 
 	If($ScriptInfo)
 	{
-		$SIFile = "$($pwd.Path)\PVSHealthCheckScriptInfo_$(Get-Date -f yyyy-MM-dd_HHmm).txt"
+		$SIFile = "$Script:pwdpath\PVSHealthCheckScriptInfo_$(Get-Date -f yyyy-MM-dd_HHmm).txt"
 		Out-File -FilePath $SIFile -InputObject "" 4>$Null
 		Out-File -FilePath $SIFile -Append -InputObject "AdminAddress       : $($AdminAddress)" 4>$Null
 		Out-File -FilePath $SIFile -Append -InputObject "CSV                : $($CSV)" 4>$Null
@@ -4440,22 +4561,31 @@ Function Get-RegistryValue
 		#path needed here is different for remote registry access
 		$path = $path.SubString(6)
 		$path2 = $path.Replace('\','\\')
-		$Reg = [Microsoft.Win32.RegistryKey]::OpenRemoteBaseKey('LocalMachine', $ComputerName)
-		$RegKey = $Reg.OpenSubKey($path2)
-		If ($RegKey)
+		
+		Try
 		{
-			$Results = $RegKey.GetValue($name)
-
-			If($Null -ne $Results)
+			$Reg = [Microsoft.Win32.RegistryKey]::OpenRemoteBaseKey('LocalMachine', $ComputerName)
+			$RegKey = $Reg.OpenSubKey($path2)
+			If ($RegKey)
 			{
-				Return $Results
+				$Results = $RegKey.GetValue($name)
+
+				If($Null -ne $Results)
+				{
+					Return $Results
+				}
+				Else
+				{
+					Return $Null
+				}
 			}
 			Else
 			{
 				Return $Null
 			}
 		}
-		Else
+		
+		Catch
 		{
 			Return $Null
 		}
@@ -4684,6 +4814,22 @@ If($Folder -ne "")
 	}
 }
 
+If($Folder -eq "")
+{
+	$Script:pwdpath = $pwd.Path
+}
+Else
+{
+	$Script:pwdpath = $Folder
+}
+
+If($Script:pwdpath.EndsWith("\"))
+{
+	#remove the trailing \
+	$Script:pwdpath = $Script:pwdpath.SubString(0, ($Script:pwdpath.Length - 1))
+}
+
+
 If(![String]::IsNullOrEmpty($SmtpServer) -and [String]::IsNullOrEmpty($From) -and [String]::IsNullOrEmpty($To))
 {
 	Write-Error "
@@ -4748,8 +4894,7 @@ If(![String]::IsNullOrEmpty($To) -and [String]::IsNullOrEmpty($SmtpServer))
 If($Log) 
 {
 	#start transcript logging
-	$Script:ThisScriptPath = Split-Path -Parent $MyInvocation.MyCommand.Definition
-	$Script:LogPath = "$Script:ThisScriptPath\PVSHealthCheckScriptTranscript_$(Get-Date -f yyyy-MM-dd_HHmm).txt"
+	$Script:LogPath = "$Script:pwdpath\PVSHealthCheckScriptTranscript_$(Get-Date -f yyyy-MM-dd_HHmm).txt"
 	
 	try 
 	{
@@ -4767,7 +4912,7 @@ If($Log)
 If($Dev)
 {
 	$Error.Clear()
-	$Script:DevErrorFile = "$($pwd.Path)\PVSHealthCheckScriptErrors_$(Get-Date -f yyyy-MM-dd_HHmm).txt"
+	$Script:DevErrorFile = "$Script:pwdpath\PVSHealthCheckScriptErrors_$(Get-Date -f yyyy-MM-dd_HHmm).txt"
 }
 
 [string]$Script:RunningOS = (Get-WmiObject -class Win32_OperatingSystem -EA 0).Caption
@@ -4779,16 +4924,16 @@ $Script:BootstrapItems         = New-Object System.Collections.ArrayList
 $Script:TaskOffloadItems       = New-Object System.Collections.ArrayList
 $Script:PVSServiceItems        = New-Object System.Collections.ArrayList
 $Script:VersionsToMerge        = New-Object System.Collections.ArrayList
-$Script:NICIPAddresses = @{}
+$Script:NICIPAddresses         = @{}
 $Script:StreamingIPAddresses   = New-Object System.Collections.ArrayList
 $Script:BadIPs                 = New-Object System.Collections.ArrayList
 $Script:EmptyDeviceCollections = New-Object System.Collections.ArrayList
 $Script:MiscRegistryItems      = New-Object System.Collections.ArrayList
 $Script:CacheOnServer          = New-Object System.Collections.ArrayList
-$Script:MSHotfixes             = New-Object System.Collections.ArrayList	
-$Script:WinInstalledComponents = New-Object System.Collections.ArrayList	
+$Script:MSHotfixes             = New-Object System.Collections.ArrayList
+$Script:WinInstalledComponents = New-Object System.Collections.ArrayList
 $Script:PVSProcessItems        = New-Object System.Collections.ArrayList
-$script:startTime = get-date
+$script:startTime              = Get-Date
 
 # v1.17 - switch to using a StringBuilder for $global:Output
 [System.Text.StringBuilder] $global:Output = New-Object System.Text.StringBuilder( 16384 )
