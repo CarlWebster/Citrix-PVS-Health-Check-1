@@ -1,8 +1,44 @@
-#Carl Webster, CTP and #Carl Webster, CTP and Sr. Solutions Architect at Choice Solutions
-
+#Carl Webster, CTP 
 #webster@carlwebster.com
 #@carlwebster on Twitter
 #http://www.CarlWebster.com
+
+#Version 1.22 28-Apr-2020
+#	Add -Dev, -Log, and -ScriptInfo parameters (Thanks to Guy Leech for the push)
+#	Add Function ProcessScriptEnd
+#	Add Receive Side Scaling setting to Function OutputNICItem
+#	Attempt to automatically register the old string-based PowerShell snapins (Thanks to Guy Leech for the push)
+#		The script should be run from an elevated PowerShell session.
+#	Change location of the -Dev, -Log, and -ScriptInfo output files from the script folder to the -Folder location (Thanks to Guy Leech for the "suggestion")
+#	Change output file names from "assessment" to "HealthCheck"
+#	Cleaned up and reorganized the code
+#	Fix determining Bad Streaming IP addresses (Guy Leech magic pixie dust fix)
+#		Array was initialized but never populated
+#		The Management IP is not available for PVS versions earlier than 7.0
+#		Update Functions ProcessPVSSite and OutputAppendixJ
+#	Fix wrong variable name in Function OutputAppendixG (another Guy Leech find)
+#	Fix wrong variable name in Function VerifyPVSSOAPService (Thanks to Guy Leech for finding this)
+#	Reformatted the terminating Write-Error messages to make them more visible and readable in the console
+#	Remove an invalid test for PVS license that bombed on Server 2008 R2 and PVS 6.x
+#	Remove Function validObject
+#	Remove the SMTP parameterset and manually verify the parameters
+#	Rename script from PVS_Assessment to PVS_HealthCheck
+#	Update Function BuildPVSObject by adding Try/Catch to catch stuff that isn't working in a current version of PVS
+#	Update Function Get-IPAddress with suggestions from Guy Leech
+#	Update Function Get-RegistryValue to add Try/Catch to catch registry values that don't exist on older versions of PVS
+#	Update Function ProcessStores to fix several issues:
+#		Using code from Guy Leech, work when running remotely
+#		Process the Store path validation for all servers that offer the Store
+#		Change the output text for Store path validation
+#		Process the Write Cache Path validation for all servers that offer the Store
+#		Change the output text for Store Write Cache Path validation
+#		Add text showing if the default Write Cache Path is used and the name of the default location
+#	Update Function SendEmail to handle anonymous unauthenticated email
+#	Update Function ShowScriptOptions for new parameters
+#	Update Function VerifyPVSServices with suggestions from Guy Leech (is that a surprise?)
+#	Update Functions GetInstalledRolesAndFeatures and OutputAppendixN to skip Server 2008 R2 as the Get-WindowsFeature cmdlet doesn't have the -ComputerName parameter
+#	Update Functions GetComputerWMIInfo and OutputNicInfo to fix two bugs in NIC Power Management settings
+#	Update Help Text
 
 #Version 1.21 9-Sep-2019
 #	Fix incorrect LicenseSKU value for PVS version 7.19 and later
