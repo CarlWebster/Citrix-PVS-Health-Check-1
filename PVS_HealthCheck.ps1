@@ -227,7 +227,7 @@
 	NAME: PVS_HealthCheck.ps1
 	VERSION: 1.22
 	AUTHOR: Carl Webster (with a lot of help from BG a, now former, Citrix dev)
-	LASTEDIT: April 27, 2020
+	LASTEDIT: April 28, 2020
 #>
 
 
@@ -290,13 +290,14 @@ Param(
 #released to the community on February 2, 2016
 #
 
-#Version 1.22
+#Version 1.22 28-Apr-2020
 #	Add -Dev, -Log, and -ScriptInfo parameters (Thanks to Guy Leech for the push)
 #	Add Function ProcessScriptEnd
 #	Add Receive Side Scaling setting to Function OutputNICItem
 #	Attempt to automatically register the old string-based PowerShell snapins (Thanks to Guy Leech for the push)
 #		The script should be run from an elevated PowerShell session.
-#	Change location of the -Dev, -Log, and -ScriptInfo output files from the script folder to the -Folder location (Thanks to Guy Leech for the "suggestion")#	Change output file names from "assessment" to "HealthCheck"
+#	Change location of the -Dev, -Log, and -ScriptInfo output files from the script folder to the -Folder location (Thanks to Guy Leech for the "suggestion")
+#	Change output file names from "assessment" to "HealthCheck"
 #	Cleaned up and reorganized the code
 #	Fix determining Bad Streaming IP addresses (Guy Leech magic pixie dust fix)
 #		Array was initialized but never populated
@@ -304,15 +305,16 @@ Param(
 #		Update Functions ProcessPVSSite and OutputAppendixJ
 #	Fix wrong variable name in Function OutputAppendixG (another Guy Leech find)
 #	Fix wrong variable name in Function VerifyPVSSOAPService (Thanks to Guy Leech for finding this)
-#	Reformatted the Write-Error messages to make them more visible and readable in the console
+#	Reformatted the terminating Write-Error messages to make them more visible and readable in the console
 #	Remove an invalid test for PVS license that bombed on Server 2008 R2 and PVS 6.x
 #	Remove Function validObject
 #	Remove the SMTP parameterset and manually verify the parameters
 #	Rename script from PVS_Assessment to PVS_HealthCheck
 #	Update Function BuildPVSObject by adding Try/Catch to catch stuff that isn't working in a current version of PVS
+#	Update Function Get-IPAddress with suggestions from Guy Leech
 #	Update Function Get-RegistryValue to add Try/Catch to catch registry values that don't exist on older versions of PVS
 #	Update Function ProcessStores to fix several issues:
-#		Using code from Guy Leech, work when run remotely
+#		Using code from Guy Leech, work when running remotely
 #		Process the Store path validation for all servers that offer the Store
 #		Change the output text for Store path validation
 #		Process the Write Cache Path validation for all servers that offer the Store
@@ -320,7 +322,7 @@ Param(
 #		Add text showing if the default Write Cache Path is used and the name of the default location
 #	Update Function SendEmail to handle anonymous unauthenticated email
 #	Update Function ShowScriptOptions for new parameters
-#	Update Function VerifyPVSServices with suggestions from Guy Leech
+#	Update Function VerifyPVSServices with suggestions from Guy Leech (is that a surprise?)
 #	Update Functions GetInstalledRolesAndFeatures and OutputAppendixN to skip Server 2008 R2 as the Get-WindowsFeature cmdlet doesn't have the -ComputerName parameter
 #	Update Functions GetComputerWMIInfo and OutputNicInfo to fix two bugs in NIC Power Management settings
 #	Update Help Text
@@ -845,21 +847,28 @@ Function Get-IPAddress
 	#V1.16 added new function
 	Param([string]$ComputerName)
 	
-	$IPAddress = "Unable to determine"
-	
-	Try
+	If( ! [string]::ISNullOrEmpty( $computername ) )
 	{
-		$IP = Test-Connection -ComputerName $ComputerName -Count 1 | Select-Object IPV4Address
-	}
-	
-	Catch
-	{
-		$IP = "Unable to resolve IP address"
-	}
+		$IPAddress = "Unable to determine"
+		
+		Try
+		{
+			$IP = Test-Connection -ComputerName $ComputerName -Count 1 | Select-Object IPV4Address
+		}
+		
+		Catch
+		{
+			$IP = "Unable to resolve IP address"
+		}
 
-	If($? -and $Null -ne $IP -and $IP -ne "Unable to resolve IP address")
+		If($? -and $Null -ne $IP -and $IP -ne "Unable to resolve IP address")
+		{
+			$IPAddress = $IP.IPV4Address.IPAddressToString
+		}
+	}
+	Else
 	{
-		$IPAddress = $IP.IPV4Address.IPAddressToString
+		$IPAddress = ""
 	}
 	
 	Return $IPAddress
@@ -3229,11 +3238,16 @@ Function ProcessStores
 			#Run through the servers again and test each one for the path
 			ForEach ($StoreServer in $StoreServers)
 			{
-				#next line from Guy Leech
-				If(Invoke-Command -ComputerName $StoreServer `
-				-ScriptBlock { Param( [string]$path ) ; `
-				Test-Path -Path $path -PathType Container -ErrorAction SilentlyContinue } `
-				-ArgumentList $store.path)
+				#next few lines from Guy Leech
+                [hashtable]$invokeCommandParameters = @{}
+                If( $StoreServer -ne $env:COMPUTERNAME -and $StoreServer -ne "$env:COMPUTERNAME.$env:UserDnsDomain" )
+                {
+                    $invokeCommandParameters.Add( 'ComputerName' , $StoreServer )
+                }
+				If(Invoke-Command @invokeCommandParameters `
+				    -ScriptBlock { Param( [string]$path ) ; `
+				    Test-Path -Path $path -PathType Container -ErrorAction SilentlyContinue } `
+				    -ArgumentList $store.path)
 				{
 					Line 2 "Default store path: $($Store.path) on server $StoreServer is valid"
 				}
@@ -3251,11 +3265,16 @@ Function ProcessStores
 				{
 					ForEach($WCPath in $WCPaths)
 					{
-						#next line from Guy Leech
-						If(Invoke-Command -ComputerName $StoreServer `
-						-ScriptBlock { Param( [string]$path ) ; `
-						Test-Path -Path $path -PathType Container -ErrorAction SilentlyContinue } `
-						-ArgumentList $WCPath)
+						#next few lines from Guy Leech
+						[hashtable]$invokeCommandParameters = @{}
+						If( $StoreServer -ne $env:COMPUTERNAME -and $StoreServer -ne "$env:COMPUTERNAME.$env:UserDnsDomain" )
+						{
+							$invokeCommandParameters.Add( 'ComputerName' , $StoreServer )
+						}
+						If(Invoke-Command @invokeCommandParameters `
+							-ScriptBlock { Param( [string]$path ) ; `
+							Test-Path -Path $path -PathType Container -ErrorAction SilentlyContinue } `
+							-ArgumentList $WCPath)
 						{
 							Line 3 "Write Cache Path $($WCPath) on server $StoreServer is valid" 
 						}
@@ -4828,7 +4847,6 @@ If($Script:pwdpath.EndsWith("\"))
 	#remove the trailing \
 	$Script:pwdpath = $Script:pwdpath.SubString(0, ($Script:pwdpath.Length - 1))
 }
-
 
 If(![String]::IsNullOrEmpty($SmtpServer) -and [String]::IsNullOrEmpty($From) -and [String]::IsNullOrEmpty($To))
 {
