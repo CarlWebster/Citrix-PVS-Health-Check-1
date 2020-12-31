@@ -15,7 +15,16 @@
 	Specifies the name of a PVS server that the PowerShell script will connect to. 
 	Using this parameter requires the script be run from an elevated PowerShell session.
 	Starting with V1.11 of the script, this requirement is now checked.
+
 	This parameter has an alias of AA
+.PARAMETER Domain
+	Specifies the domain used for the AdminAddress connection. 
+
+	Default value is contained in $env:UserDomain
+.PARAMETER User
+	Specifies the user used for the AdminAddress connection. 
+
+	Default value is contained in $env:username
 .PARAMETER CSV
 	Will create a CSV file for each Appendix.
 	The default value is False.
@@ -40,6 +49,11 @@
 		TNPVSFarm_HealthCheck_AppendixM_MicrosoftHotfixesandUpdates.csv
 		TNPVSFarm_HealthCheck_AppendixN_InstalledRolesandFeatures.csv
 		TNPVSFarm_HealthCheck_AppendixO_PVSProcesses.csv
+		TNPVSFarm_HealthCheck_AppendixP_ItemsToReview.csv
+		TNPVSFarm_HealthCheck_AppendixQ_ServerComputerItemsToReview.csv
+		TNPVSFarm_HealthCheck_AppendixQ_ServerDriveItemsToReview.csv
+		TNPVSFarm_HealthCheck_AppendixQ_ServerProcessorItemsToReview.csv
+		TNPVSFarm_HealthCheck_AppendixQ_ServerNICItemsToReview.csv
 .PARAMETER Dev
 	Clears errors at the beginning of the script.
 	Outputs all errors to a text file at the end of the script.
@@ -48,22 +62,16 @@
 	The text file is placed in the same folder from where the script is run.
 	
 	This parameter is disabled by default.
-.PARAMETER Domain
-	Specifies the domain used for the AdminAddress connection. 
 .PARAMETER Folder
 	Specifies the optional output folder to save the output report. 
 .PARAMETER Log
 	Generates a log file for troubleshooting.
-.PARAMETER Password
-	Specifies the password used for the AdminAddress connection. 
 .PARAMETER ScriptInfo
 	Outputs information about the script to a text file.
 	The text file is placed in the same folder from where the script is run.
 	
 	This parameter is disabled by default.
 	This parameter has an alias of SI.
-.PARAMETER User
-	Specifies the user used for the AdminAddress connection. 
 .PARAMETER SmtpServer
 	Specifies the optional email server to send the output report. 
 .PARAMETER SmtpPort
@@ -84,7 +92,7 @@
 	Will use all Default values.
 	LocalHost for AdminAddress.
 .EXAMPLE
-	PS C:\PSScript > .\PVS_HealthCheck.ps1 -AdminAddress PVS1 -User cwebster -Domain WebstersLab -Password Abc123!@#
+	PS C:\PSScript > .\PVS_HealthCheck.ps1 -AdminAddress PVS1 -User cwebster -Domain WebstersLab
 
 	This example is usually used to run the script against a PVS Farm in 
 	another domain or forest.
@@ -93,14 +101,17 @@
 		PVS1 for AdminAddress.
 		cwebster for User.
 		WebstersLab for Domain.
-		Abc123!@# for Password.
+
+	Uses Get-Credential to prompt for the password.
 .EXAMPLE
 	PS C:\PSScript > .\PVS_HealthCheck.ps1 -AdminAddress PVS1 -User cwebster
 
 	Will use:
 		PVS1 for AdminAddress.
 		cwebster for User.
-		Script will prompt for the Domain and Password
+		$env:UserDnsDomain for the Domain.
+
+	Uses Get-Credential to prompt for the password.
 .EXAMPLE
 	PS C:\PSScript > .\PVS_HealthCheck.ps1 -Folder \\FileServer\ShareName
 	
@@ -225,9 +236,9 @@
 	No objects are output from this script.  This script creates a text file.
 .NOTES
 	NAME: PVS_HealthCheck.ps1
-	VERSION: 1.22
+	VERSION: 1.23
 	AUTHOR: Carl Webster (with a lot of help from BG a, now former, Citrix dev)
-	LASTEDIT: April 28, 2020
+	LASTEDIT: December 31, 2020
 #>
 
 
@@ -240,14 +251,17 @@ Param(
 	[string]$AdminAddress="",
 
 	[parameter(Mandatory=$False)] 
+	[string]$Domain=$env:UserDomain,
+
+	[parameter(Mandatory=$False)] 
+	[string]$User=$env:username,
+
+	[parameter(Mandatory=$False)] 
 	[switch]$CSV=$False,
 
 	[parameter(Mandatory=$False)] 
 	[Switch]$Dev=$False,
 	
-	[parameter(Mandatory=$False)] 
-	[string]$Domain=$env:UserDnsDomain,
-
 	[parameter(Mandatory=$False)] 
 	[string]$Folder="",
 
@@ -255,15 +269,9 @@ Param(
 	[Switch]$Log=$False,
 	
 	[parameter(Mandatory=$False)] 
-	[string]$Password="",
-
-	[parameter(Mandatory=$False)] 
 	[Alias("SI")]
 	[Switch]$ScriptInfo=$False,
 	
-	[parameter(Mandatory=$False)] 
-	[string]$User="",
-
 	[parameter(Mandatory=$False)] 
 	[string]$SmtpServer="",
 
@@ -290,6 +298,43 @@ Param(
 #released to the community on February 2, 2016
 #
 
+#Version 1.23
+#	Added Appendix P - Items to Review
+#		Auditing is not enabled
+#		Offline database support is not enabled
+#		Problem report Citrix Username is <Name/ID>
+#		<ServerName> event logging is not enabled
+#	Added Appendix Q - Server Items to Review
+#		Computer Items to Review
+#		Drive Items to Review
+#		Processor Items to Review
+#		NIC Items to Review
+#	Added the following CSV files:
+#		PVSFarm_HealthCheck_AppendixP_ItemsToReview.csv
+#		PVSFarm_HealthCheck_AppendixQ_ServerComputerItemsToReview.csv
+#		PVSFarm_HealthCheck_AppendixQ_ServerDriveItemsToReview.csv
+#		PVSFarm_HealthCheck_AppendixQ_ServerProcessorItemsToReview.csv
+#		PVSFarm_HealthCheck_AppendixQ_ServerNICItemsToReview.csv
+#	Added to the Farm info, the Security and Groups tabs (requested by JLuhring)
+#	Added to the Farm info if the PVS version is >= 7.11, the Problem Report Citrix Username (requested by JLuhring)
+#	Added to the vDisks in Farm section:
+#		Recommended RAM for each PVS Server using XA & XD vDisks
+#	Added to the Computer Hardware section, the server's Power Plan (requested by JLuhring)
+#	Changed all Verbose statements from Get-Date to Get-Date -Format G as requested by Guy Leech
+#	Changed the default Domain value to $env:UserDomain
+#	Changed the default User value to $env:username
+#		Combine the two values for the call to Get-Credential
+#	Changed the variable PVSFullVersion to type [version] for better comparisons
+#	Check for the McliPSSnapIn snapin before installing the .Net snapins
+#		If the snapin already exists, there was no need to install and register the .Net V2 and V4 snapins for every script run
+#	Cleaned up alignment for most of the output
+#	Removed the Password parameter to keep from having the password entered as plaintext
+#		Use Get-Credential and code from Frank Lindenblatt to get the password from the $credential object
+#		The mcli-run SetupConnection uses only a plaintext password
+#	Reordered parameters in an order recommended by Guy Leech
+#	Updated the help text
+#	Updated the ReadMe file
+#
 #Version 1.22 28-Apr-2020
 #	Add -Dev, -Log, and -ScriptInfo parameters (Thanks to Guy Leech for the push)
 #	Add Function ProcessScriptEnd
@@ -471,105 +516,113 @@ Param(
 #region PoSH prereqs
 Function CheckOnPoSHPrereqs
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Checking for McliPSSnapin"
-	$PFiles = [System.Environment]::GetEnvironmentVariable('ProgramFiles')
-	#Let's see if the DLLs can be registered
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Attempting to register the .Net V2 snapins"
-	If(Test-Path "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" -EA 0)
-	{
-		$installutil = $env:systemroot + '\Microsoft.NET\Framework\v2.0.50727\installutil.exe'
-		If(Test-Path $installutil -EA 0)
-		{
-			&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
-		
-			If(!$?)
-			{
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Unable to register the 32-bit V2 PowerShell Snap-in."
-			}
-			Else
-			{
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Registered the 32-bit V2 PowerShell Snap-in."
-			}
-		}
-
-		$installutil = $env:systemroot + '\Microsoft.NET\Framework64\v2.0.50727\installutil.exe'
-		If(Test-Path $installutil -EA 0)
-		{
-			&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
-		
-			If(!$?)
-			{
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Unable to register the 64-bit V2 PowerShell Snap-in."
-			}
-			Else
-			{
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Registered the 64-bit V2 PowerShell Snap-in."
-			}
-		}
-	}
-	Else
-	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Unable to find "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll""
-	}
-	
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Attempting to register the .Net V4 snapins"
-	If(Test-Path "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" -EA 0)
-	{
-		$installutil = $env:systemroot + '\Microsoft.NET\Framework\v4.0.30319\installutil.exe'
-		If(Test-Path $installutil -EA 0)
-		{
-			&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
-		
-			If(!$?)
-			{
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Unable to register the 32-bit V4 PowerShell Snap-in."
-			}
-			Else
-			{
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Registered the 32-bit V4 PowerShell Snap-in."
-			}
-		}
-
-		$installutil = $env:systemroot + '\Microsoft.NET\Framework64\v4.0.30319\installutil.exe'
-		If(Test-Path $installutil -EA 0)
-		{
-			&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
-		
-			If(!$?)
-			{
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Unable to register the 64-bit V4 PowerShell Snap-in."
-			}
-			Else
-			{
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Registered the 64-bit V4 PowerShell Snap-in."
-			}
-		}
-	}
-	Else
-	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Unable to find "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll""
-	}
-
-
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Rechecking for McliPSSnapin"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Checking for McliPSSnapin"
 	If(!(Check-NeededPSSnapins "McliPSSnapIn"))
 	{
 		#We're missing Citrix Snapins that we need
-		Write-Error "
-		`n`n
-		`t`t
-		Missing Citrix PowerShell Snap-ins Detected, check the console above for more information.
-		`n`n
-		`t`t
-		Script will now close.
-		`n`n
-		"
-		Exit
+		$PFiles = [System.Environment]::GetEnvironmentVariable('ProgramFiles')
+		#Let's see if the DLLs can be registered
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Attempting to register the .Net V2 snapins"
+		If(Test-Path "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" -EA 0)
+		{
+			$installutil = $env:systemroot + '\Microsoft.NET\Framework\v2.0.50727\installutil.exe'
+			If(Test-Path $installutil -EA 0)
+			{
+				&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
+			
+				If(!$?)
+				{
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Unable to register the 32-bit V2 PowerShell Snap-in."
+				}
+				Else
+				{
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Registered the 32-bit V2 PowerShell Snap-in."
+				}
+			}
+	
+			$installutil = $env:systemroot + '\Microsoft.NET\Framework64\v2.0.50727\installutil.exe'
+			If(Test-Path $installutil -EA 0)
+			{
+				&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
+			
+				If(!$?)
+				{
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Unable to register the 64-bit V2 PowerShell Snap-in."
+				}
+				Else
+				{
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Registered the 64-bit V2 PowerShell Snap-in."
+				}
+			}
+		}
+		Else
+		{
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Unable to find "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll""
+		}
+		
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Attempting to register the .Net V4 snapins"
+		If(Test-Path "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" -EA 0)
+		{
+			$installutil = $env:systemroot + '\Microsoft.NET\Framework\v4.0.30319\installutil.exe'
+			If(Test-Path $installutil -EA 0)
+			{
+				&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
+			
+				If(!$?)
+				{
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Unable to register the 32-bit V4 PowerShell Snap-in."
+				}
+				Else
+				{
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Registered the 32-bit V4 PowerShell Snap-in."
+				}
+			}
+	
+			$installutil = $env:systemroot + '\Microsoft.NET\Framework64\v4.0.30319\installutil.exe'
+			If(Test-Path $installutil -EA 0)
+			{
+				&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
+			
+				If(!$?)
+				{
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Unable to register the 64-bit V4 PowerShell Snap-in."
+				}
+				Else
+				{
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Registered the 64-bit V4 PowerShell Snap-in."
+				}
+			}
+		}
+		Else
+		{
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Unable to find "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll""
+		}
+	
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Rechecking for McliPSSnapin"
+		If(!(Check-NeededPSSnapins "McliPSSnapIn"))
+		{
+			#We're missing Citrix Snapins that we need
+			Write-Error "
+			`n`n
+			`t`t
+			Missing Citrix PowerShell Snap-ins Detected, check the console above for more information.
+			`n`n
+			`t`t
+			Script will now close.
+			`n`n
+			"
+			Exit
+		}
+		Else
+		{
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Citrix PowerShell Snap-ins detected."
+		}
 	}
 	Else
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Citrix PowerShell Snap-ins detected."
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Citrix PowerShell Snap-ins detected."
 	}
+
 }
 #endregion
 
@@ -580,41 +633,45 @@ Function SetupRemoting
 	[bool]$Script:Remoting = $False
 	If(![System.String]::IsNullOrEmpty($AdminAddress))
 	{
-		
-		If(![System.String]::IsNullOrEmpty($User))
-		{
-			If([System.String]::IsNullOrEmpty($Domain))
-			{
-				$Domain = Read-Host "Domain name for user is required. Enter Domain name for user"
-			}		
+		#V1.23 changed to get-credentials with tip and code from Frank Lindenblatt of the PoSH Users Group Hanover (Germany)
+		#This way the Password is not exposed in plaintext
 
-			If([System.String]::IsNullOrEmpty($Password))
-			{
-				$Password = Read-Host "Password for user is required. Enter password for user"
-			}		
+		$credential = Get-Credential -Message "Enter the credentials to connect to $AdminAddress" -UserName "$Domain\$User"
+
+		If($Null -ne $credential)
+		{
+			$netCred = $credential.GetNetworkCredential()
+	
+			$Domain   = "$($netCred.Domain)"
+			$User     = "$($netCred.UserName)"
+			$Password = "$($netCred.Password)"
+
 			$error.Clear()
 			mcli-run SetupConnection -p server="$($AdminAddress)",user="$($User)",domain="$($Domain)",password="$($Password)"
-		}
-		Else
-		{
-			$error.Clear()
-			mcli-run SetupConnection -p server="$($AdminAddress)"
-		}
 
-		If($error.Count -eq 0)
-		{
-			$Script:Remoting = $True
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): This script is being run remotely against server $($AdminAddress)"
-			If(![System.String]::IsNullOrEmpty($User))
+			If($error.Count -eq 0)
 			{
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): User=$($User)"
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Domain=$($Domain)"
+				$Script:Remoting = $True
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): This script is being run remotely against server $($AdminAddress)"
+				If(![System.String]::IsNullOrEmpty($User))
+				{
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): User=$($User)"
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Domain=$($Domain)"
+				}
+			}
+			Else 
+			{
+				Write-Warning "Remoting could not be setup to server $($AdminAddress)"
+				$tmp = $Error[0]
+				Write-Warning "Error returned is $tmp"
+				Write-Warning "Script cannot continue"
+				Exit
 			}
 		}
 		Else 
 		{
 			Write-Warning "Remoting could not be setup to server $($AdminAddress)"
-			Write-Warning "Error returned is " $error[0]
+			Write-Warning "Credentials are invalid"
 			Write-Warning "Script cannot continue"
 			Exit
 		}
@@ -637,14 +694,14 @@ Function VerifyPVSServices
 	If($AdminAddress -eq "")
 	{
 		$tmp = $env:ComputerName
-		Write-Verbose "$(Get-Date): Server name changed from localhost to $tmp"
+		Write-Verbose "$(Get-Date -Format G): Server name changed from localhost to $tmp"
 	}
 	Else
 	{
 		$tmp = $AdminAddress
 	}
 	
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Verifying PVS SOAP and Stream Services are running on $tmp"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Verifying PVS SOAP and Stream Services are running on $tmp"
 
 	$soapserver = $Null
 	$StreamService = $Null
@@ -728,7 +785,7 @@ Function VerifyPVSServices
 Function GetPVSVersion
 {
 	#get PVS major version
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Getting PVS version info"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Getting PVS version info"
 
 	$error.Clear()
 	$tempversion = mcli-info version
@@ -765,8 +822,8 @@ Function GetPVSVersion
 		Exit
 	}
 
-	$Script:PVSVersion     = $Version.mapiVersion.SubString(0,1)
-	$Script:PVSFullVersion = $Version.mapiVersion
+	$Script:PVSVersion              = $Version.mapiVersion.SubString(0,1)
+	[version]$Script:PVSFullVersion = $Version.mapiVersion
 }
 #endregion
 
@@ -774,7 +831,7 @@ Function GetPVSVersion
 Function GetPVSFarm
 {
 	#build PVS farm values
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Build PVS farm values"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Build PVS farm values"
 	#there can only be one farm
 	$GetWhat = "Farm"
 	$GetParam = ""
@@ -810,34 +867,34 @@ Function SetFileName1
 #region show script options
 Function ShowScriptOptions
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): AdminAddress       : $($AdminAddress)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): CSV                : $($CSV)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Dev                : $($Dev)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Domain             : $($Domain)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Filename1          : $($Script:filename1)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Folder             : $($Script:pwdpath)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): From               : $($From)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Log                : $($Log)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): PVS Farm Name      : $($Script:farm.farmName)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): PVS Version        : $($Script:PVSFullVersion)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): ScriptInfo         : $($ScriptInfo)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Smtp Port          : $($SmtpPort)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Smtp Server        : $($SmtpServer)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Title              : $($Script:Title)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): To                 : $($To)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Use SSL            : $($UseSSL)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): User               : $($User)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): OS Detected        : $($Script:RunningOS)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): PoSH version       : $($Host.Version)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): PSCulture          : $($PSCulture)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): PSUICulture        : $($PSUICulture)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Script start       : $($Script:StartTime)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): AdminAddress       : $($AdminAddress)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): CSV                : $($CSV)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Dev                : $($Dev)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Domain             : $($Domain)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Filename1          : $($Script:filename1)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Folder             : $($Script:pwdpath)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): From               : $($From)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Log                : $($Log)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): PVS Farm Name      : $($Script:farm.farmName)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): PVS Version        : $($Script:PVSFullVersion)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): ScriptInfo         : $($ScriptInfo)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Smtp Port          : $($SmtpPort)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Smtp Server        : $($SmtpServer)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Title              : $($Script:Title)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): To                 : $($To)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Use SSL            : $($UseSSL)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): User               : $($User)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): OS Detected        : $($Script:RunningOS)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): PoSH version       : $($Host.Version)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): PSCulture          : $($PSCulture)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): PSUICulture        : $($PSUICulture)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Script start       : $($Script:StartTime)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
@@ -876,7 +933,7 @@ Function Get-IPAddress
 
 Function ProcessPVSFarm
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing PVS Farm Information"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing PVS Farm Information"
 
 	$LicenseServerIPAddress = Get-IPAddress $Script:farm.licenseServer #added in V1.16
 	
@@ -888,9 +945,9 @@ Function ProcessPVSFarm
 	If( ( $inx = $dbServer.IndexOfAny( ',\' ) ) -ge 0 )
 	{
 		#strip the instance name and/or port name, if present
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Removing '$( $dbServer.SubString( $inx ) )' from SQL server name to get IP address"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Removing '$( $dbServer.SubString( $inx ) )' from SQL server name to get IP address"
 		$dbServer = $dbServer.SubString( 0, $inx )
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): dbServer now '$dbServer'"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): dbServer now '$dbServer'"
 	}
 	$SQLServerIPAddress = Get-IPAddress $dbServer #added in V1.16
 	
@@ -898,20 +955,61 @@ Function ProcessPVSFarm
 	If( ( $inx = $dbServer.IndexOfAny( ',\' ) ) -ge 0 )
 	{
 		#strip the instance name and/or port name, if present
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Removing '$( $dbServer.SubString( $inx ) )' from SQL server name to get IP address"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Removing '$( $dbServer.SubString( $inx ) )' from SQL server name to get IP address"
 		$dbServer = $dbServer.SubString( 0, $inx )
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): dbServer now '$dbServer'"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): dbServer now '$dbServer'"
 	}
 	$FailoverSQLServerIPAddress = Get-IPAddress $dbServer #added in V1.16
 	
 	#general tab
-	Line 0 "PVS Farm Name: " $Script:farm.farmName
-	Line 0 "Version: " $Script:PVSFullVersion
+	Line 0 "PVS Farm Name`t`t`t: " $Script:farm.farmName
+	Line 0 "Version`t`t`t`t: " $Script:PVSFullVersion
 	
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Licensing Tab"
-	Line 0 "License server name: " $Script:farm.licenseServer
-	Line 0 "License server IP: " $LicenseServerIPAddress
-	Line 0 "License server port: " $Script:farm.licenseServerPort
+	#security tab
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Security Tab"
+	Line 0 "Security"
+	Line 1 "Groups with Farm Administrator access:"
+	#build security tab values
+	$GetWhat = "authgroup"
+	$GetParam = "farm = 1"
+	$ErrorTxt = "Groups with Farm Administrator access"
+	$authgroups = BuildPVSObject $GetWhat $GetParam $ErrorTxt
+
+	If($AuthGroups -ne $Null)
+	{
+		ForEach($Group in $authgroups)
+		{
+			If($Group.authGroupName)
+			{
+				Line 2 $Group.authGroupName
+			}
+		}
+	}
+
+	#groups tab
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Groups Tab"
+	Line 0 "Groups"
+	Line 1 "All the Security Groups that can be assigned access rights:"
+	$GetWhat = "authgroup"
+	$GetParam = ""
+	$ErrorTxt = "Security Groups information"
+	$authgroups = BuildPVSObject $GetWhat $GetParam $ErrorTxt
+
+	If($AuthGroups -ne $Null)
+	{
+		ForEach($Group in $authgroups)
+		{
+			If($Group.authGroupName)
+			{
+				Line 2 $Group.authGroupName
+			}
+		}
+	}
+
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Licensing Tab"
+	Line 0 "License server name`t`t: " $Script:farm.licenseServer
+	Line 0 "License server IP`t`t: " $LicenseServerIPAddress
+	Line 0 "License server port`t`t: " $Script:farm.licenseServerPort
 	If($Script:PVSVersion -eq "5")
 	{
 		Line 0 "Use Datacenter licenses for desktops if no Desktop licenses are available: " -nonewline
@@ -930,7 +1028,7 @@ Function ProcessPVSFarm
 		Line 0 "Citrix Provisioning license type" ""
 		If($farm.LicenseSKU -eq 0)  #fix in 1.21 uint LicenseSKU: LicenseSKU. 0 for on-premises, 1 for cloud. Min=0, Max=1, Default=0
 		{
-			Line 1 "On-Premises: " "Yes"
+			Line 1 "On-Premises`t: " "Yes"
 			Line 2 "Use Datacenter licenses for desktops if no Desktop licenses are available: " -nonewline
 			If($farm.licenseTradeUp -eq "1")
 			{
@@ -940,13 +1038,13 @@ Function ProcessPVSFarm
 			{
 				Line 0 "No"
 			}
-			Line 1 "Cloud: " "No"
+			Line 1 "Cloud`t`t: " "No"
 		}
 		ElseIf($farm.LicenseSKU -eq 1)
 		{
-			Line 1 "On-Premises: " "No"
+			Line 1 "On-Premises`t: " "No"
 			Line 2 "Use Datacenter licenses for desktops if no Desktop licenses are available: No"
-			Line 1 "Cloud: " "Yes"
+			Line 1 "Cloud`t`t: " "Yes"
 		}
 		Else
 		{
@@ -958,11 +1056,11 @@ Function ProcessPVSFarm
 		Line 1 "Use Datacenter licenses for desktops if no Desktop licenses are available: " $DatacenterLicense
 	}
 
-	Line 0 "Enable auto-add: " -nonewline
+	Line 0 "Enable auto-add`t`t`t: " -nonewline
 	If($farm.autoAddEnabled -eq "1")
 	{
 		Line 0 "Yes"
-		Line 0 "Add new devices to this site: " $farm.DefaultSiteName
+		Line 0 "Add new devices to this site`t: " $farm.DefaultSiteName
 		$Script:FarmAutoAddEnabled = $True
 	}
 	Else
@@ -972,8 +1070,8 @@ Function ProcessPVSFarm
 	}	
 	
 	#options tab
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Options Tab"
-	Line 0 "Enable auditing: " -nonewline
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Options Tab"
+	Line 0 "Enable auditing`t`t`t: " -nonewline
 	If($Script:farm.auditingEnabled -eq "1")
 	{
 		Line 0 "Yes"
@@ -981,8 +1079,12 @@ Function ProcessPVSFarm
 	Else
 	{
 		Line 0 "No"
+		$obj1 = [PSCustomObject] @{
+			ItemText = "Auditing is not enabled"
+		}
+		$null = $Script:ItemsToReview.Add($obj1)
 	}
-	Line 0 "Enable offline database support: " -nonewline
+	Line 0 "Enable offline database support`t: " -nonewline
 	If($Script:farm.offlineDatabaseSupportEnabled -eq "1")
 	{
 		Line 0 "Yes"	
@@ -990,15 +1092,40 @@ Function ProcessPVSFarm
 	Else
 	{
 		Line 0 "No"
+		$obj1 = [PSCustomObject] @{
+			ItemText = "Offline database support is not enabled"
+		}
+		$null = $Script:ItemsToReview.Add($obj1)
 	}
-
+	
+	#7.11 Problem Report tab
+	If($Script:PVSFullVersion -ge "7.11")
+	{
+		$GetWhat = "cisdata"
+		$GetParam = ""
+		$ErrorTxt = "Problem Report information"
+		$ProblemReports = BuildPVSObject $GetWhat $GetParam $ErrorTxt
+		
+		If($Null -ne $ProblemReports)
+		{
+			If($ProblemReports.UserName -ne "")
+			{
+				Line 0 "Problem report Citrix Username`t: " $ProblemReports.UserName
+				$obj1 = [PSCustomObject] @{
+					ItemText = "Problem report Citrix Username is $($ProblemReports.UserName)"
+				}
+				$null = $Script:ItemsToReview.Add($obj1)
+			}
+		}
+	}
+	
 	If($Script:PVSVersion -eq "6" -or $Script:PVSVersion -eq "7")
 	{
 		#vDisk Version tab
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing vDisk Version Tab"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing vDisk Version Tab"
 		Line 0 "vDisk Version"
-		Line 1 "Alert if number of versions from base image exceeds: " $Script:farm.maxVersions
-		Line 1 "Default access mode for new merge versions: " -nonewline
+		Line 1 "Alert if number of versions from base image exceeds`t: " $Script:farm.maxVersions
+		Line 1 "Default access mode for new merge versions`t`t: " -nonewline
 		Switch ($Script:farm.mergeMode)
 		{
 			0   {Line 0 "Production"; Break }
@@ -1009,14 +1136,14 @@ Function ProcessPVSFarm
 	}
 	
 	#status tab
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Status Tab"
-	Line 0 "Database server: " $Script:farm.databaseServerName
-	Line 0 "Database server IP: " $SQLServerIPAddress
-	Line 0 "Database instance: " $Script:farm.databaseInstanceName
-	Line 0 "Database: " $Script:farm.databaseName
-	Line 0 "Failover Partner Server: " $Script:farm.failoverPartnerServerName
-	Line 0 "Failover Partner Server IP: " $FailoverSQLServerIPAddress
-	Line 0 "Failover Partner Instance: " $Script:farm.failoverPartnerInstanceName
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Status Tab"
+	Line 0 "Database server`t`t`t: " $Script:farm.databaseServerName
+	Line 0 "Database server IP`t`t: " $SQLServerIPAddress
+	Line 0 "Database instance`t`t: " $Script:farm.databaseInstanceName
+	Line 0 "Database`t`t`t: " $Script:farm.databaseName
+	Line 0 "Failover Partner Server`t`t: " $Script:farm.failoverPartnerServerName
+	Line 0 "Failover Partner Server IP`t: " $FailoverSQLServerIPAddress
+	Line 0 "Failover Partner Instance`t: " $Script:farm.failoverPartnerInstanceName
 	If($Script:farm.adGroupsEnabled -eq "1")
 	{
 		Line 0 "Active Directory groups are used for access rights"
@@ -1026,7 +1153,7 @@ Function ProcessPVSFarm
 		Line 0 "Active Directory groups are not used for access rights"
 	}
 	Line 0 ""
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
@@ -1034,7 +1161,7 @@ Function ProcessPVSFarm
 Function ProcessPVSSite
 {
 	#build site values
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Sites"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Sites"
 	$GetWhat = "site"
 	$GetParam = ""
 	$ErrorTxt = "PVS Site information"
@@ -1042,18 +1169,18 @@ Function ProcessPVSSite
 	
 	If($Null -eq $PVSSites)
 	{
-		Write-Host -foregroundcolor Red -backgroundcolor Black "WARNING: $(Get-Date): No Sites Found"
+		Write-Host -foregroundcolor Red -backgroundcolor Black "WARNING: $(Get-Date -Format G): No Sites Found"
 		Line 0 "No Sites Found "
 	}
 	Else
 	{
 		ForEach($PVSSite in $PVSSites)
 		{
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Site $($PVSSite.siteName)"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Site $($PVSSite.siteName)"
 			Line 0 "Site Name: " $PVSSite.siteName
 
 			#security tab
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Security Tab"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Security Tab"
 			$temp = $PVSSite.SiteName
 			$GetWhat = "authgroup"
 			$GetParam = "sitename = $temp"
@@ -1061,25 +1188,25 @@ Function ProcessPVSSite
 			$authgroups = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 			If($Null -ne $authGroups)
 			{
-				Line 1 "Groups with Site Administrator access:"
+				Line 1 "Groups with Site Administrator access`t`t:"
 				ForEach($Group in $authgroups)
 				{
-					Line 2 $Group.authGroupName
+					Line 7 "  " $Group.authGroupName
 				}
 			}
 			Else
 			{
-				Line 1 "Groups with Site Administrator access: No Site Administrators defined"
+				Line 1 "Groups with Site Administrator access`t`t: No Site Administrators defined"
 			}
 
 			#MAK tab
 			#MAK User and Password are encrypted
 
 			#options tab
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Options Tab"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Options Tab"
 			If($PVSVersion -eq "5" -or (($PVSVersion -eq "6" -or $PVSVersion -eq "7") -and $FarmAutoAddEnabled))
 			{
-				Line 1 "Add new devices to this collection: " -nonewline
+				Line 1 "Add new devices to this collection`t`t: " -nonewline
 				If($PVSSite.DefaultCollectionName)
 				{
 					Line 0 $PVSSite.DefaultCollectionName
@@ -1093,25 +1220,25 @@ Function ProcessPVSSite
 			{
 				If($PVSVersion -eq "6")
 				{
-					Line 1 "Seconds between vDisk inventory scans: " $PVSSite.inventoryFilePollingInterval
+					Line 1 "Seconds between vDisk inventory scans`t`t: " $PVSSite.inventoryFilePollingInterval
 				}
 
 				#vDisk Update
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing vDisk Update Tab"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing vDisk Update Tab"
 				If($PVSSite.enableDiskUpdate -eq "1")
 				{
-					Line 1 "Enable automatic vDisk updates on this site: Yes"
-					Line 1 "Server to run vDisk updates for this site: " $PVSSite.diskUpdateServerName
+					Line 1 "Enable automatic vDisk updates on this site`t: Yes"
+					Line 1 "Server to run vDisk updates for this site`t: " $PVSSite.diskUpdateServerName
 				}
 				Else
 				{
-					Line 1 "Enable automatic vDisk updates on this site: No"
+					Line 1 "Enable automatic vDisk updates on this site`t: No"
 				}
 			}
 			Line 0 ""
 			
 			#process all servers in site
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Servers in Site $($PVSSite.siteName)"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Servers in Site $($PVSSite.siteName)"
 			$temp = $PVSSite.SiteName
 			$GetWhat = "server"
 			$GetParam = "sitename = $temp"
@@ -1120,7 +1247,7 @@ Function ProcessPVSSite
 			
 			If($Null -eq $servers)
 			{
-				Write-Host -foregroundcolor Red -backgroundcolor Black "WARNING: $(Get-Date): No Servers Found in Site $($PVSSite.siteName)"
+				Write-Host -foregroundcolor Red -backgroundcolor Black "WARNING: $(Get-Date -Format G): No Servers Found in Site $($PVSSite.siteName)"
 				Line 0 "No Servers Found in Site $($PVSSite.siteName)"
 			}
 			Else
@@ -1131,11 +1258,11 @@ Function ProcessPVSSite
 					#first make sure the SOAP service is running on the server
 					If(VerifyPVSSOAPService $Server.serverName)
 					{
-						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Server $($Server.serverName)"
+						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Server $($Server.serverName)"
 						#general tab
-						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing General Tab"
-						Line 2 "Name: " $Server.serverName
-						Line 2 "Log events to the server's Windows Event Log: " -nonewline
+						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing General Tab"
+						Line 2 "Name`t`t`t`t`t`t: " $Server.serverName
+						Line 2 "Log events to the server's Windows Event Log`t: " -nonewline
 						If($Server.eventLoggingEnabled -eq "1")
 						{
 							Line 0 "Yes"
@@ -1143,9 +1270,13 @@ Function ProcessPVSSite
 						Else
 						{
 							Line 0 "No"
+							$obj1 = [PSCustomObject] @{
+								ItemText = "$($Server.serverName) event logging is not enabled"
+							}
+							$null = $Script:ItemsToReview.Add($obj1)
 						}
 							
-						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Network Tab"
+						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Network Tab"
 						$test = $Server.ip.ToString()
 						$test1 = $test.replace(",",", ")
 						
@@ -1161,17 +1292,17 @@ Function ProcessPVSSite
 						}
 						If($Script:PVSVersion -eq "7")
 						{
-							Line 2 "Streaming IP addresses: " $test1
+							Line 2 "Streaming IP addresses`t`t`t`t: " $test1
 						}
 						Else
 						{
-							Line 2 "IP addresses: " $test1
+							Line 2 "IP addresses`t`t`t`t`t: " $test1
 						}
-						Line 2 "First port: " $Server.firstPort
-						Line 2 "Last port: " $Server.lastPort
+						Line 2 "First port`t`t`t`t`t: " $Server.firstPort
+						Line 2 "Last port`t`t`t`t`t: " $Server.lastPort
 						If($Script:PVSVersion -eq "7")
 						{
-							Line 2 "Management IP: " $Server.managementIp
+							Line 2 "Management IP`t`t`t`t`t: " $Server.managementIp
 							$obj1 = [PSCustomObject] @{
 								ServerName = $Server.serverName							
 								IPAddress  = $Server.managementIp
@@ -1181,7 +1312,7 @@ Function ProcessPVSSite
 							
 						#create array for appendix A
 						
-						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Gather Advanced server info for Appendix A and B"
+						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Gather Advanced server info for Appendix A and B"
 						$obj1 = [PSCustomObject] @{
 							ServerName              = $Server.serverName						
 							ThreadsPerPort          = $Server.threadsPerPort						
@@ -1235,7 +1366,7 @@ Function ProcessPVSSite
 			}
 
 			#process all device collections in site
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing all device collections in site"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing all device collections in site"
 			$Temp = $PVSSite.SiteName
 			$GetWhat = "Collection"
 			$GetParam = "siteName = $Temp"
@@ -1247,11 +1378,11 @@ Function ProcessPVSSite
 				Line 1 "Device Collections"
 				ForEach($Collection in $Collections)
 				{
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Collection $($Collection.collectionName)"
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing General Tab"
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Collection $($Collection.collectionName)"
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing General Tab"
 					Line 2 "Name: " $Collection.collectionName
 
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Security Tab"
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Security Tab"
 					$Temp = $Collection.collectionId
 					$GetWhat = "authGroup"
 					$GetParam = "collectionId = $Temp"
@@ -1261,7 +1392,7 @@ Function ProcessPVSSite
 					$DeviceAdmins = $False
 					If($Null -ne $AuthGroups)
 					{
-						Line 2 "Groups with 'Device Administrator' access:"
+						Line 3 "Groups with 'Device Administrator' access`t:"
 						ForEach($AuthGroup in $AuthGroups)
 						{
 							$Temp = $authgroup.authGroupName
@@ -1276,7 +1407,7 @@ Function ProcessPVSSite
 									If($AuthGroupUsage.role -eq "300")
 									{
 										$DeviceAdmins = $True
-										Line 3 $authgroup.authGroupName
+										Line 9 "  " $authgroup.authGroupName
 									}
 								}
 							}
@@ -1284,13 +1415,13 @@ Function ProcessPVSSite
 					}
 					If(!$DeviceAdmins)
 					{
-						Line 2 "Groups with 'Device Administrator' access: None defined"
+						Line 3 "Groups with 'Device Administrator' access`t: None defined"
 					}
 
 					$DeviceOperators = $False
 					If($Null -ne $AuthGroups)
 					{
-						Line 2 "Groups with 'Device Operator' access:"
+						Line 3 "Groups with 'Device Operator' access`t`t:"
 						ForEach($AuthGroup in $AuthGroups)
 						{
 							$Temp = $authgroup.authGroupName
@@ -1305,7 +1436,7 @@ Function ProcessPVSSite
 									If($AuthGroupUsage.role -eq "400")
 									{
 										$DeviceOperators = $True
-										Line 3 $authgroup.authGroupName
+										Line 9 "  " $authgroup.authGroupName
 									}
 								}
 							}
@@ -1313,23 +1444,23 @@ Function ProcessPVSSite
 					}
 					If(!$DeviceOperators)
 					{
-						Line 2 "Groups with 'Device Operator' access: None defined"
+						Line 3 "Groups with 'Device Operator' access`t`t: None defined"
 					}
 
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Auto-Add Tab"
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Auto-Add Tab"
 					If($Script:FarmAutoAddEnabled)
 					{
-						Line 2 "Template target device: " $Collection.templateDeviceName
+						Line 3 "Template target device`t`t`t`t: " $Collection.templateDeviceName
 						If(![String]::IsNullOrEmpty($Collection.autoAddPrefix) -or ![String]::IsNullOrEmpty($Collection.autoAddPrefix))
 						{
-							Line 2 "Device Name"
+							Line 4 "Device Name"
 						}
 						If(![String]::IsNullOrEmpty($Collection.autoAddPrefix))
 						{
-							Line 3 "Prefix: " $Collection.autoAddPrefix
+							Line 5 "Prefix`t`t`t: " $Collection.autoAddPrefix
 						}
-						Line 3 "Length: " $Collection.autoAddNumberLength
-						Line 3 "Zero fill: " -nonewline
+						Line 5 "Length`t`t`t: " $Collection.autoAddNumberLength
+						Line 5 "Zero fill`t`t: " -nonewline
 						If($Collection.autoAddZeroFill -eq "1")
 						{
 							Line 0 "Yes"
@@ -1340,16 +1471,16 @@ Function ProcessPVSSite
 						}
 						If(![String]::IsNullOrEmpty($Collection.autoAddPrefix))
 						{
-							Line 3 "Suffix: " $Collection.autoAddSuffix
+							Line 5 "Suffix`t`t`t: " $Collection.autoAddSuffix
 						}
-						Line 3 "Last incremental #: " $Collection.lastAutoAddDeviceNumber
+						Line 5 "Last incremental #`t: " $Collection.lastAutoAddDeviceNumber
 					}
 					Else
 					{
-						Line 2 "The auto-add feature is not enabled at the PVS Farm level"
+						Line 3 "The auto-add feature is not enabled at the PVS Farm level"
 					}
 					#for each collection process each device
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing the first device in each collection"
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing the first device in each collection"
 					$Temp = $Collection.collectionId
 					$GetWhat = "deviceInfo"
 					$GetParam = "collectionId = $Temp"
@@ -1360,7 +1491,7 @@ Function ProcessPVSSite
 					{
 						Line 0 ""
 						$Device = $Devices[0]
-						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Device $($Device.deviceName)"
+						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Device $($Device.deviceName)"
 						If($Device.type -eq "3")
 						{
 							Line 3 "Device with Personal vDisk Properties"
@@ -1369,11 +1500,11 @@ Function ProcessPVSSite
 						{
 							Line 3 "Target Device Properties"
 						}
-						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing General Tab"
-						Line 3 "Name: " $Device.deviceName
+						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing General Tab"
+						Line 4 "Name`t`t`t`t`t: " $Device.deviceName
 						If(($PVSVersion -eq "6" -or $PVSVersion -eq "7") -and $Device.type -ne "3")
 						{
-							Line 3 "Type: " -nonewline
+							Line 4 "Type`t`t`t`t`t: " -nonewline
 							Switch ($Device.type)
 							{
 								0 {Line 0 "Production"; Break}
@@ -1385,7 +1516,7 @@ Function ProcessPVSSite
 						}
 						If($Device.type -ne "3")
 						{
-							Line 3 "Boot from: " -nonewline
+							Line 4 "Boot from`t`t`t`t: " -nonewline
 							Switch ($Device.bootFrom)
 							{
 								1 {Line 0 "vDisk"; Break}
@@ -1394,10 +1525,10 @@ Function ProcessPVSSite
 								Default {Line 0 "Boot from could not be determined: $($Device.bootFrom)"; Break}
 							}
 						}
-						Line 3 "Port: " $Device.port
+						Line 4 "Port`t`t`t`t`t: " $Device.port
 						If($Device.type -ne "3")
 						{
-							Line 3 "Disabled: " -nonewline
+							Line 4 "Disabled`t`t`t`t: " -nonewline
 							If($Device.enabled -eq "1")
 							{
 								Line 0 "No"
@@ -1409,10 +1540,10 @@ Function ProcessPVSSite
 						}
 						Else
 						{
-							Line 3 "vDisk: " $Device.diskLocatorName
-							Line 3 "Personal vDisk Drive: " $Device.pvdDriveLetter
+							Line 4 "vDisk`t`t`t`t`t: " $Device.diskLocatorName
+							Line 4 "Personal vDisk Drive`t`t`t: " $Device.pvdDriveLetter
 						}
-						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing vDisks Tab"
+						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing vDisks Tab"
 						#process all vdisks for this device
 						$Temp = $Device.deviceName
 						$GetWhat = "DiskInfo"
@@ -1423,10 +1554,10 @@ Function ProcessPVSSite
 						{
 							ForEach($vDisk in $vDisks)
 							{
-								Line 3 "vDisk Name: $($vDisk.storeName)`\$($vDisk.diskLocatorName)"
+								Line 4 "vDisk Name`t`t`t`t: $($vDisk.storeName)`\$($vDisk.diskLocatorName)"
 							}
 						}
-						Line 3 "List local hard drive in boot menu: " -nonewline
+						Line 4 "List local hard drive in boot menu`t: " -nonewline
 						If($Device.localDiskEnabled -eq "1")
 						{
 							Line 0 "Yes"
@@ -1440,7 +1571,7 @@ Function ProcessPVSSite
 					}
 					Else
 					{
-						Line 2 "No Target Devices found. Device Collection is empty."
+						Line 3 "No Target Devices found. Device Collection is empty."
 						Line 0 ""
 						$obj1 = [PSCustomObject] @{
 							CollectionName = $Collection.collectionName
@@ -1452,18 +1583,18 @@ Function ProcessPVSSite
 		}
 	}
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 
 Function VerifyPVSSOAPService
 {
 	Param([string]$PVSServer='')
 	
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Verifying server $($PVSServer) is online"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Verifying server $($PVSServer) is online"
 	If(Test-Connection -ComputerName $PVSServer -quiet -EA 0)
 	{
 
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Verifying PVS SOAP Service is running on server $($PVSServer)"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Verifying PVS SOAP Service is running on server $($PVSServer)"
 		$soapserver = $Null
 
 		$soapserver = Get-Service -ComputerName $PVSServer -EA 0 | Where-Object {$_.Name -like "soapserver"}
@@ -1499,7 +1630,7 @@ Function GetInstalledRolesAndFeatures
 	Else
 	{
 		#added V1.16 get Windows installed Roles and Features
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): `tRetrieving Windows installed Roles and Features"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tRetrieving Windows installed Roles and Features"
 		[bool]$GotWinComponents = $True
 		
 		$results = Get-WindowsFeature -ComputerName $ComputerName -EA 0 4> $Null
@@ -1511,7 +1642,7 @@ Function GetInstalledRolesAndFeatures
 		
 		$WinComponents = $results | Where-Object Installed | Select-Object DisplayName,Name,FeatureType | Sort-Object DisplayName 
 		
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): `tOutput Windows installed Roles and Features"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tOutput Windows installed Roles and Features"
 		If($GotWinComponents -eq $False)
 		{
 			Line 1 "No Windows installed Roles and Features were found"
@@ -1602,9 +1733,9 @@ Function GetBootstrapInfo
 {
 	Param([object]$server)
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Bootstrap files"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Bootstrap files"
 	Line 2 "Bootstrap settings"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Bootstrap files for Server $($server.servername)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Bootstrap files for Server $($server.servername)"
 	#first get all bootstrap files for the server
 	$temp = $server.serverName
 	$GetWhat = "ServerBootstrapNames"
@@ -1662,11 +1793,11 @@ Function GetBootstrapInfo
 		}
 		If($Null -ne $ServerBootstraps)
 		{
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Bootstrap file $($ServerBootstrap.Bootstrapname)"
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing General Tab"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Bootstrap file $($ServerBootstrap.Bootstrapname)"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing General Tab"
 			ForEach($ServerBootstrap in $ServerBootstraps)
 			{
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Gather Bootstrap info for Appendix D"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Gather Bootstrap info for Appendix D"
 				$obj1 = [PSCustomObject] @{
 					ServerName 	  = $Server.serverName				
 					BootstrapName = $ServerBootstrap.Bootstrapname				
@@ -1677,38 +1808,38 @@ Function GetBootstrapInfo
 				}
 				$null = $Script:BootstrapItems.Add($obj1)
 
-				Line 3 "Bootstrap file: " $ServerBootstrap.Bootstrapname
+				Line 3 "Bootstrap file`t: " $ServerBootstrap.Bootstrapname
 				If($ServerBootstrap.bootserver1_Ip -ne "0.0.0.0")
 				{
-					Line 3 "IP Address: " $ServerBootstrap.bootserver1_Ip
-					Line 3 "Subnet Mask: " $ServerBootstrap.bootserver1_Netmask
-					Line 3 "Gateway: " $ServerBootstrap.bootserver1_Gateway
-					Line 3 "Port: " $ServerBootstrap.bootserver1_Port
+					Line 3 "IP Address`t: " $ServerBootstrap.bootserver1_Ip
+					Line 3 "Subnet Mask`t: " $ServerBootstrap.bootserver1_Netmask
+					Line 3 "Gateway`t`t: " $ServerBootstrap.bootserver1_Gateway
+					Line 3 "Port`t`t: " $ServerBootstrap.bootserver1_Port
 				}
 				If($ServerBootstrap.bootserver2_Ip -ne "0.0.0.0")
 				{
-					Line 3 "IP Address: " $ServerBootstrap.bootserver2_Ip
-					Line 3 "Subnet Mask: " $ServerBootstrap.bootserver2_Netmask
-					Line 3 "Gateway: " $ServerBootstrap.bootserver2_Gateway
-					Line 3 "Port: " $ServerBootstrap.bootserver2_Port
+					Line 3 "IP Address`t: " $ServerBootstrap.bootserver2_Ip
+					Line 3 "Subnet Mask`t: " $ServerBootstrap.bootserver2_Netmask
+					Line 3 "Gateway`t`t: " $ServerBootstrap.bootserver2_Gateway
+					Line 3 "Port`t`t: " $ServerBootstrap.bootserver2_Port
 				}
 				If($ServerBootstrap.bootserver3_Ip -ne "0.0.0.0")
 				{
-					Line 3 "IP Address: " $ServerBootstrap.bootserver3_Ip
-					Line 3 "Subnet Mask: " $ServerBootstrap.bootserver3_Netmask
-					Line 3 "Gateway: " $ServerBootstrap.bootserver3_Gateway
-					Line 3 "Port: " $ServerBootstrap.bootserver3_Port
+					Line 3 "IP Address`t: " $ServerBootstrap.bootserver3_Ip
+					Line 3 "Subnet Mask`t: " $ServerBootstrap.bootserver3_Netmask
+					Line 3 "Gateway`t`t: " $ServerBootstrap.bootserver3_Gateway
+					Line 3 "Port`t`t: " $ServerBootstrap.bootserver3_Port
 				}
 				If($ServerBootstrap.bootserver4_Ip -ne "0.0.0.0")
 				{
-					Line 3 "IP Address: " $ServerBootstrap.bootserver4_Ip
-					Line 3 "Subnet Mask: " $ServerBootstrap.bootserver4_Netmask
-					Line 3 "Gateway: " $ServerBootstrap.bootserver4_Gateway
-					Line 3 "Port: " $ServerBootstrap.bootserver4_Port
+					Line 3 "IP Address`t: " $ServerBootstrap.bootserver4_Ip
+					Line 3 "Subnet Mask`t: " $ServerBootstrap.bootserver4_Netmask
+					Line 3 "Gateway`t`t: " $ServerBootstrap.bootserver4_Gateway
+					Line 3 "Port`t`t: " $ServerBootstrap.bootserver4_Port
 				}
 				Line 0 ""
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Options Tab"
-				Line 3 "Verbose mode: " -nonewline
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Options Tab"
+				Line 3 "Verbose mode`t`t: " -nonewline
 				If($ServerBootstrap.verboseMode -eq "1")
 				{
 					Line 0 "Yes"
@@ -1717,7 +1848,7 @@ Function GetBootstrapInfo
 				{
 					Line 0 "No"
 				}
-				Line 3 "Interrupt safe mode: " -nonewline
+				Line 3 "Interrupt safe mode`t: " -nonewline
 				If($ServerBootstrap.interruptSafeMode -eq "1")
 				{
 					Line 0 "Yes"
@@ -1726,7 +1857,7 @@ Function GetBootstrapInfo
 				{
 					Line 0 "No"
 				}
-				Line 3 "Advanced Memory Support: " -nonewline
+				Line 3 "Advanced Memory Support`t: " -nonewline
 				If($ServerBootstrap.paeMode -eq "1")
 				{
 					Line 0 "Yes"
@@ -1735,7 +1866,7 @@ Function GetBootstrapInfo
 				{
 					Line 0 "No"
 				}
-				Line 3 "Network recovery method: " -nonewline
+				Line 3 "Network recovery method`t: " -nonewline
 				If($ServerBootstrap.bootFromHdOnFail -eq "0")
 				{
 					Line 0 "Restore network connection"
@@ -1744,7 +1875,7 @@ Function GetBootstrapInfo
 				{
 					Line 0 "Reboot to Hard Drive after $($ServerBootstrap.recoveryTime) seconds"
 				}
-				Line 3 "Login polling timeout: " -nonewline
+				Line 3 "Login polling timeout`t: " -nonewline
 				If($ServerBootstrap.pollingTimeout -eq "")
 				{
 					Line 0 "5000 (milliseconds)"
@@ -1753,7 +1884,7 @@ Function GetBootstrapInfo
 				{
 					Line 0 "$($ServerBootstrap.pollingTimeout) (milliseconds)"
 				}
-				Line 3 "Login general timeout: " -nonewline
+				Line 3 "Login general timeout`t: " -nonewline
 				If($ServerBootstrap.generalTimeout -eq "")
 				{
 					Line 0 "5000 (milliseconds)"
@@ -1777,7 +1908,7 @@ Function GetPVSServiceInfo
 {
 	Param([string]$ComputerName)
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing PVS Services for Server $($server.servername)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing PVS Services for Server $($server.servername)"
 	$Services = Get-WmiObject -ComputerName $ComputerName Win32_Service -EA 0 | `
 	Where-Object {$_.DisplayName -like "Citrix PVS*"} | `
 	Select-Object displayname, name, status, startmode, started, startname, state | `
@@ -1841,7 +1972,7 @@ Function GetPVSProcessInfo
 	
 	#All four of those run within the StreamService.exe process.
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing PVS Processes for Server $($server.servername)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing PVS Processes for Server $($server.servername)"
 
 	Try
 	{
@@ -2018,7 +2149,7 @@ Function GetMicrosoftHotfixes
 	Param([string]$ComputerName)
 	
 	#added V1.16 get installed Microsoft Hotfixes and Updates
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): `tRetrieving Microsoft hotfixes and updates"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tRetrieving Microsoft hotfixes and updates"
 	[bool]$GotMSHotfixes = $True
 	
 	Try
@@ -2033,7 +2164,7 @@ Function GetMicrosoftHotfixes
 		$GotMSHotfixes = $False
 	}
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): `tOutput Microsoft hotfixes and updates"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tOutput Microsoft hotfixes and updates"
 	If($GotMSHotfixes -eq $False)
 	{
 		Line 1 "No installed Microsoft hotfixes or updates were found"
@@ -2070,10 +2201,11 @@ Function GetComputerWMIInfo
 	# modified 2-Apr-2018 to add ComputerOS information
 
 	#Get Computer info
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): `t`tProcessing WMI Computer information"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): `t`t`tHardware information"
-	Line 0 "Computer Information: $($RemoteComputerName)"
-	Line 1 "General Computer"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tProcessing WMI Computer information"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tHardware information"
+	Line 0 ""
+	Line 2 "Computer Information: $($RemoteComputerName)"
+	Line 3 "General Computer"
 	
 	Try
 	{
@@ -2095,29 +2227,29 @@ Function GetComputerWMIInfo
 
 		ForEach($Item in $ComputerItems)
 		{
-			OutputComputerItem $Item $ComputerOS
+			OutputComputerItem $Item $ComputerOS $RemoteComputerName
 		}
 	}
 	ElseIf(!$?)
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
 		Write-Warning "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
-		Line 2 "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
-		Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-		Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-		Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
-		Line 2 ""
+		Line 4 "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
+		Line 4 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
+		Line 4 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
+		Line 4 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+		Line 4 ""
 	}
 	Else
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): No results Returned for Computer information"
-		Line 2 "No results Returned for Computer information"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): No results Returned for Computer information"
+		Line 4 "No results Returned for Computer information"
 	}
 	
 	#Get Disk info
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): `t`t`tDrive information"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tDrive information"
 
-	Line 1 "Drive(s)"
+	Line 3 "Drive(s)"
 
 	Try
 	{
@@ -2139,30 +2271,30 @@ Function GetComputerWMIInfo
 		{
 			If($drive.caption -ne "A:" -and $drive.caption -ne "B:")
 			{
-				OutputDriveItem $drive
+				OutputDriveItem $drive $RemoteComputerName
 			}
 		}
 	}
 	ElseIf(!$?)
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
 		Write-Warning "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
-		Line 2 "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
-		Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-		Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-		Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+		Line 4 "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
+		Line 4 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
+		Line 4 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
+		Line 4 "need to rerun the script with Domain Admin credentials from the trusted Forest."
 	}
 	Else
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): No results Returned for Drive information"
-		Line 2 "No results Returned for Drive information"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): No results Returned for Drive information"
+		Line 4 "No results Returned for Drive information"
 	}
 	
 
 	#Get CPU's and stepping
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): `t`t`tProcessor information"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tProcessor information"
 
-	Line 1 "Processor(s)"
+	Line 3 "Processor(s)"
 
 	Try
 	{
@@ -2181,28 +2313,28 @@ Function GetComputerWMIInfo
 		$Results = $Null
 		ForEach($processor in $processors)
 		{
-			OutputProcessorItem $processor
+			OutputProcessorItem $processor $RemoteComputerName
 		}
 	}
 	ElseIf(!$?)
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
 		Write-Warning "Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
-		Line 2 "Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
-		Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-		Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-		Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+		Line 4 "Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
+		Line 4 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
+		Line 4 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
+		Line 4 "need to rerun the script with Domain Admin credentials from the trusted Forest."
 	}
 	Else
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): No results Returned for Processor information"
-		Line 2 "No results Returned for Processor information"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): No results Returned for Processor information"
+		Line 4 "No results Returned for Processor information"
 	}
 
 	#Get Nics
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): `t`t`tNIC information"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tNIC information"
 
-	Line 1 "Network Interface(s)"
+	Line 3 "Network Interface(s)"
 
 	[bool]$GotNics = $True
 	
@@ -2250,38 +2382,38 @@ Function GetComputerWMIInfo
 				}
 				ElseIf(!$?)
 				{
-					Write-Warning "$(Get-Date): Error retrieving NIC information"
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+					Write-Warning "$(Get-Date -Format G): Error retrieving NIC information"
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
 					Write-Warning "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-					Line 2 "Error retrieving NIC information"
-					Line 2 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-					Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-					Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-					Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+					Line 4 "Error retrieving NIC information"
+					Line 4 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+					Line 4 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
+					Line 4 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
+					Line 4 "need to rerun the script with Domain Admin credentials from the trusted Forest."
 				}
 				Else
 				{
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): No results Returned for NIC information"
-					Line 2 "No results Returned for NIC information"
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): No results Returned for NIC information"
+					Line 4 "No results Returned for NIC information"
 				}
 			}
 		}	
 	}
 	ElseIf(!$?)
 	{
-		Write-Warning "$(Get-Date): Error retrieving NIC configuration information"
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+		Write-Warning "$(Get-Date -Format G): Error retrieving NIC configuration information"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
 		Write-Warning "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-		Line 2 "Error retrieving NIC configuration information"
-		Line 2 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-		Line 2 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-		Line 2 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-		Line 2 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+		Line 4 "Error retrieving NIC configuration information"
+		Line 4 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+		Line 4 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
+		Line 4 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
+		Line 4 "need to rerun the script with Domain Admin credentials from the trusted Forest."
 	}
 	Else
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): No results Returned for NIC configuration information"
-		Line 2 "No results Returned for NIC configuration information"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): No results Returned for NIC configuration information"
+		Line 4 "No results Returned for NIC configuration information"
 	}
 	
 	Line 0 ""
@@ -2289,22 +2421,50 @@ Function GetComputerWMIInfo
 
 Function OutputComputerItem
 {
-	Param([object]$Item, [string]$OS)
+	Param([object]$Item, [string]$OS, [string]$RemoteComputerName)
 	# modified 2-Apr-2018 to add Operating System information
 	
-	Line 2 "Manufacturer`t`t`t: " $Item.manufacturer
-	Line 2 "Model`t`t`t`t: " $Item.model
-	Line 2 "Domain`t`t`t`t: " $Item.domain
-	Line 2 "Operating System`t`t: " $OS
-	Line 2 "Total Ram`t`t`t: $($Item.totalphysicalram) GB"
-	Line 2 "Physical Processors (sockets)`t: " $Item.NumberOfProcessors
-	Line 2 "Logical Processors (cores w/HT)`t: " $Item.NumberOfLogicalProcessors
-	Line 2 ""
+	#get computer's power plan
+	#https://techcommunity.microsoft.com/t5/core-infrastructure-and-security/get-the-active-power-plan-of-multiple-servers-with-powershell/ba-p/370429
+	
+	try 
+	{
+
+		$PowerPlan = (Get-WmiObject -ComputerName $RemoteComputerName -Class Win32_PowerPlan -Namespace "root\cimv2\power" |
+			Where-Object {$_.IsActive -eq $true} |
+			Select-Object @{Name = "PowerPlan"; Expression = {$_.ElementName}}).PowerPlan
+	}
+
+	catch 
+	{
+
+		$PowerPlan = $_.Exception
+
+	}	
+	
+	Line 4 "Manufacturer`t`t`t: " $Item.manufacturer
+	Line 4 "Model`t`t`t`t: " $Item.model
+	Line 4 "Domain`t`t`t`t: " $Item.domain
+	Line 4 "Operating System`t`t: " $OS
+	Line 4 "Power Plan`t`t`t: " $PowerPlan
+	Line 4 "Total Ram`t`t`t: $($Item.totalphysicalram) GB"
+	Line 4 "Physical Processors (sockets)`t: " $Item.NumberOfProcessors
+	Line 4 "Logical Processors (cores w/HT)`t: " $Item.NumberOfLogicalProcessors
+	Line 4 ""
+	$obj1 = [PSCustomObject] @{
+		ServerName         = $RemoteComputerName
+		OperatingSystem    = $OS
+		PowerPlan          = $PowerPlan
+		TotalRam           = $Item.totalphysicalram
+		PhysicalProcessors = $Item.NumberOfProcessors
+		LogicalProcessors  = $Item.NumberOfLogicalProcessors
+	}
+	$null = $Script:ServerComputerItemsToReview.Add($obj1)
 }
 
 Function OutputDriveItem
 {
-	Param([object]$Drive)
+	Param([object]$Drive, [string]$RemoteComputerName)
 	
 	$xDriveType = ""
 	Switch ($drive.drivetype)
@@ -2332,27 +2492,33 @@ Function OutputDriveItem
 		}
 	}
 
-	Line 3 "Caption: " $drive.caption
-	Line 3 "Size: $($drive.drivesize) GB"
+	Line 4 "Caption`t`t: " $drive.caption
+	Line 4 "Size`t`t: $($drive.drivesize) GB"
 	If(![String]::IsNullOrEmpty($drive.filesystem))
 	{
-		Line 3 "File System: " $drive.filesystem
+		Line 4 "File System`t: " $drive.filesystem
 	}
-	Line 3 "Free Space: $($drive.drivefreespace) GB"
+	Line 4 "Free Space`t: $($drive.drivefreespace) GB"
 	If(![String]::IsNullOrEmpty($drive.volumename))
 	{
-		Line 3 "Volume Name: " $drive.volumename
+		Line 4 "Volume Name`t: " $drive.volumename
 	}
 	If(![String]::IsNullOrEmpty($drive.volumedirty))
 	{
-		Line 3 "Volume is Dirty: " $xVolumeDirty
+		Line 4 "Volume is Dirty`t: " $xVolumeDirty
 	}
 	If(![String]::IsNullOrEmpty($drive.volumeserialnumber))
 	{
-		Line 3 "Volume Serial #: " $drive.volumeserialnumber
+		Line 4 "Volume Serial #`t: " $drive.volumeserialnumber
 	}
-	Line 3 "Drive Type: " $xDriveType
-	Line 3 ""
+	Line 4 "Drive Type`t: " $xDriveType
+	Line 4 ""
+	$obj1 = [PSCustomObject] @{
+		ServerName   = $RemoteComputerName
+		DriveCaption = $drive.caption
+		DriveSize    = $drive.drivesize
+	}
+	$null = $Script:ServerDriveItemsToReview.Add($obj1)
 }
 
 Function OutputProcessorItem
@@ -2382,27 +2548,33 @@ Function OutputProcessorItem
 		Default	{$xAvailability = "Unknown"; Break }
 	}
 
-	Line 3 "Name: " $processor.name
-	Line 3 "Description: " $processor.description
-	Line 3 "Max Clock Speed: $($processor.maxclockspeed) MHz"
+	Line 4 "Name`t`t`t`t: " $processor.name
+	Line 4 "Description`t`t`t: " $processor.description
+	Line 4 "Max Clock Speed`t`t`t: $($processor.maxclockspeed) MHz"
 	If($processor.l2cachesize -gt 0)
 	{
-		Line 3 "L2 Cache Size: $($processor.l2cachesize) KB"
+		Line 4 "L2 Cache Size`t`t`t: $($processor.l2cachesize) KB"
 	}
 	If($processor.l3cachesize -gt 0)
 	{
-		Line 3 "L3 Cache Size: $($processor.l3cachesize) KB"
+		Line 4 "L3 Cache Size`t`t`t: $($processor.l3cachesize) KB"
 	}
 	If($processor.numberofcores -gt 0)
 	{
-		Line 3 "# of Cores: " $processor.numberofcores
+		Line 4 "# of Cores`t`t`t: " $processor.numberofcores
 	}
 	If($processor.numberoflogicalprocessors -gt 0)
 	{
-		Line 3 "# of Logical Procs (cores w/HT): " $processor.numberoflogicalprocessors
+		Line 4 "# of Logical Procs (cores w/HT)`t: " $processor.numberoflogicalprocessors
 	}
-	Line 3 "Availability: " $xAvailability
-	Line 3 ""
+	Line 4 "Availability`t`t`t: " $xAvailability
+	Line 4 ""
+	$obj1 = [PSCustomObject] @{
+		ServerName   = $RemoteComputerName
+		Cores        = $processor.numberofcores
+		LogicalProcs = $processor.numberoflogicalprocessors
+	}
+	$null = $Script:ServerProcessorItemsToReview.Add($obj1)
 }
 
 Function OutputNicItem
@@ -2533,99 +2705,108 @@ Function OutputNicItem
 		$xwinsenablelmhostslookup = "No"
 	}
 
-	Line 3 "Name: " $ThisNic.Name
+	Line 4 "Name`t`t`t`t: " $ThisNic.Name
 	If($ThisNic.Name -ne $nic.description)
 	{
-		Line 3 "Description: " $nic.description
+		Line 4 "Description`t`t`t: " $nic.description
 	}
-	Line 3 "Connection ID: " $ThisNic.NetConnectionID
-	Line 3 "Manufacturer: " $ThisNic.manufacturer
-	Line 3 "Availability: " $xAvailability
-    Line 3 "Allow the computer to turn off this device to save power: " $PowerSaving
-	Line 3 "Receive Side Scaling: " $RSSEnabled
-	Line 3 "Physical Address: " $nic.macaddress
-	Line 3 "IP Address: " $xIPAddress[0]
+	Line 4 "Connection ID`t`t`t: " $ThisNic.NetConnectionID
+	Line 4 "Manufacturer`t`t`t: " $ThisNic.manufacturer
+	Line 4 "Availability`t`t`t: " $xAvailability
+    Line 4 "Allow the computer to turn off "
+	Line 4 "this device to save power`t: " $PowerSaving
+	Line 4 "Receive Side Scaling`t`t: " $RSSEnabled
+	Line 4 "Physical Address`t`t: " $nic.macaddress
+	Line 4 "IP Address`t`t`t: " $xIPAddress[0]
 	$cnt = -1
 	ForEach($tmp in $xIPAddress)
 	{
 		$cnt++
 		If($cnt -gt 0)
 		{
-			Line 4 "    " $tmp
+			Line 8 "  " $tmp
 		}
 	}
-	Line 3 "Default Gateway: " $Nic.Defaultipgateway
-	Line 3 "Subnet Mask: " $xIPSubnet[0]
+	Line 4 "Default Gateway`t`t`t: " $Nic.Defaultipgateway
+	Line 4 "Subnet Mask`t`t`t: " $xIPSubnet[0]
 	$cnt = -1
 	ForEach($tmp in $xIPSubnet)
 	{
 		$cnt++
 		If($cnt -gt 0)
 		{
-			Line 4 "     " $tmp
+			Line 8 "  " $tmp
 		}
 	}
 	If($nic.dhcpenabled)
 	{
 		$DHCPLeaseObtainedDate = $nic.ConvertToDateTime($nic.dhcpleaseobtained)
 		$DHCPLeaseExpiresDate = $nic.ConvertToDateTime($nic.dhcpleaseexpires)
-		Line 3 "DHCP Enabled: " $nic.dhcpenabled
-		Line 3 "DHCP Lease Obtained: " $dhcpleaseobtaineddate
-		Line 3 "DHCP Lease Expires: " $dhcpleaseexpiresdate
-		Line 3 "DHCP Server:" $nic.dhcpserver
+		Line 4 "DHCP Enabled`t`t`t: " $nic.dhcpenabled
+		Line 4 "DHCP Lease Obtained`t`t: " $dhcpleaseobtaineddate
+		Line 4 "DHCP Lease Expires`t`t: " $dhcpleaseexpiresdate
+		Line 4 "DHCP Server`t`t`t:" $nic.dhcpserver
 	}
 	If(![String]::IsNullOrEmpty($nic.dnsdomain))
 	{
-		Line 3 "DNS Domain: " $nic.dnsdomain
+		Line 4 "DNS Domain`t`t`t: " $nic.dnsdomain
 	}
 	If($Null -ne $nic.dnsdomainsuffixsearchorder -and $nic.dnsdomainsuffixsearchorder.length -gt 0)
 	{
 		[int]$x = 1
-		Line 3 "DNS Search Suffixes: " $xnicdnsdomainsuffixsearchorder[0]
+		Line 4 "DNS Search Suffixes`t`t: " $xnicdnsdomainsuffixsearchorder[0]
 		$cnt = -1
 		ForEach($tmp in $xnicdnsdomainsuffixsearchorder)
 		{
 			$cnt++
 			If($cnt -gt 0)
 			{
-				Line 4 "    " $tmp
+				Line 8 "  " $tmp
 			}
 		}
 	}
-	Line 3 "DNS WINS Enabled: " $xdnsenabledforwinsresolution
+	Line 4 "DNS WINS Enabled`t`t: " $xdnsenabledforwinsresolution
 	If($Null -ne $nic.dnsserversearchorder -and $nic.dnsserversearchorder.length -gt 0)
 	{
 		[int]$x = 1
-		Line 3 "DNS Servers: " $xnicdnsserversearchorder[0]
+		Line 4 "DNS Servers`t`t`t: " $xnicdnsserversearchorder[0]
 		$cnt = -1
 		ForEach($tmp in $xnicdnsserversearchorder)
 		{
 			$cnt++
 			If($cnt -gt 0)
 			{
-				Line 4 "     " $tmp
+				Line 8 "  " $tmp
 			}
 		}
 	}
-	Line 3 "NetBIOS Setting: " $xTcpipNetbiosOptions
-	Line 3 "Enabled LMHosts: " $xwinsenablelmhostslookup
+	Line 4 "NetBIOS Setting`t`t`t: " $xTcpipNetbiosOptions
+	Line 4 "Enabled LMHosts`t`t`t: " $xwinsenablelmhostslookup
 	If(![String]::IsNullOrEmpty($nic.winshostlookupfile))
 	{
-		Line 3 "Host Lookup File: " $nic.winshostlookupfile
+		Line 4 "Host Lookup File`t`t: " $nic.winshostlookupfile
 	}
 	If(![String]::IsNullOrEmpty($nic.winsprimaryserver))
 	{
-		Line 3 "Primary Server: " $nic.winsprimaryserver
+		Line 4 "Primary Server`t`t`t: " $nic.winsprimaryserver
 	}
 	If(![String]::IsNullOrEmpty($nic.winssecondaryserver))
 	{
-		Line 3 "Secondary Server: " $nic.winssecondaryserver
+		Line 4 "Secondary Server`t`t: " $nic.winssecondaryserver
 	}
 	If(![String]::IsNullOrEmpty($nic.winsscopeid))
 	{
-		Line 3 "Scope ID: " $nic.winsscopeid
+		Line 4 "Scope ID`t`t`t: " $nic.winsscopeid
 	}
 	Line 0 ""
+	$obj1 = [PSCustomObject] @{
+		ServerName   = $RemoteComputerName
+		Name         = $ThisNic.Name
+		Manufacturer = $ThisNic.manufacturer
+		PowerMgmt    = $PowerSaving
+		RSS          = $RSSEnabled
+	}
+	$null = $Script:ServerNICItemsToReview.Add($obj1)
 }
 #endregion
 
@@ -2633,7 +2814,7 @@ Function OutputNicItem
 Function ProcessvDisksinFarm
 {
 	#process all vDisks in site
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing all vDisks in site"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing all vDisks in site"
 	[int]$NumberofvDisks = 0
 	$GetWhat = "DiskInfo"
 	$GetParam = ""
@@ -2645,12 +2826,12 @@ Function ProcessvDisksinFarm
 	{
 		ForEach($Disk in $Disks)
 		{
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing vDisk $($Disk.diskLocatorName)"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing vDisk $($Disk.diskLocatorName)"
 			Line 1 $Disk.diskLocatorName
 			If($Script:PVSVersion -eq "5")
 			{
 				#PVS 5.x
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing General Tab"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing General Tab"
 				Line 2 "Store: " $Disk.storeName
 				Line 2 "Site: " $Disk.siteName
 				Line 2 "Filename: " $Disk.diskLocatorName
@@ -2768,7 +2949,7 @@ Function ProcessvDisksinFarm
 					Default {Line 0 "Volume License Mode could not be determined: $($Disk.licenseMode)"; Break}
 				}
 				#options tab
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Options Tab"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Options Tab"
 				Line 2 "High availability (HA): " -nonewline
 				If($Disk.haEnabled -eq "1")
 				{
@@ -2801,16 +2982,16 @@ Function ProcessvDisksinFarm
 			Else
 			{
 				#PVS 6.x or 7.x
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing vDisk Properties"
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing General Tab"
-				Line 2 "Site: " $Disk.siteName
-				Line 2 "Store: " $Disk.storeName
-				Line 2 "Filename: " $Disk.diskLocatorName
-				Line 2 "Size: " (($Disk.diskSize/1024)/1024)/1024 -nonewline
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing vDisk Properties"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing General Tab"
+				Line 2 "Site`t`t`t`t`t`t: " $Disk.siteName
+				Line 2 "Store`t`t`t`t`t`t: " $Disk.storeName
+				Line 2 "Filename`t`t`t`t`t: " $Disk.diskLocatorName
+				Line 2 "Size`t`t`t`t`t`t: " (($Disk.diskSize/1024)/1024)/1024 -nonewline
 				Line 0 " MB"
-				Line 2 "VHD block size: " $Disk.vhdBlockSize -nonewline
+				Line 2 "VHD block size`t`t`t`t`t: " $Disk.vhdBlockSize -nonewline
 				Line 0 " KB"
-				Line 2 "Access mode: " -nonewline
+				Line 2 "Access mode`t`t`t`t`t: " -nonewline
 				If($Disk.writeCacheType -eq "0")
 				{
 					Line 0 "Private Image (single device, read/write access)"
@@ -2850,9 +3031,9 @@ Function ProcessvDisksinFarm
 				}
 				If(![String]::IsNullOrEmpty($Disk.menuText))
 				{
-					Line 2 "BIOS boot menu text: " $Disk.menuText
+					Line 2 "BIOS boot menu text`t`t`t`t: " $Disk.menuText
 				}
-				Line 2 "Enable AD machine acct pwd mgmt: " -nonewline
+				Line 2 "Enable AD machine account password management`t: " -nonewline
 				If($Disk.adPasswordEnabled -eq "1")
 				{
 					Line 0 "Yes"
@@ -2862,7 +3043,7 @@ Function ProcessvDisksinFarm
 					Line 0 "No"
 				}
 				
-				Line 2 "Enable printer management: " -nonewline
+				Line 2 "Enable printer management`t`t`t: " -nonewline
 				If($Disk.printerManagementEnabled -eq "1")
 				{
 					Line 0 "Yes"
@@ -2871,7 +3052,7 @@ Function ProcessvDisksinFarm
 				{
 					Line 0 "No"
 				}
-				Line 2 "Enable streaming of this vDisk: " -nonewline
+				Line 2 "Enable streaming of this vDisk`t`t`t: " -nonewline
 				If($Disk.Enabled -eq "1")
 				{
 					Line 0 "Yes"
@@ -2884,7 +3065,7 @@ Function ProcessvDisksinFarm
 				{
 					Line 0 "No"
 				}
-				Line 2 "Microsoft license type: " -nonewline
+				Line 2 "Microsoft license type`t`t`t`t: " -nonewline
 				Switch ($Disk.licenseMode)
 				{
 					0 {Line 0 "None"; Break}
@@ -2896,18 +3077,18 @@ Function ProcessvDisksinFarm
 				{
 					If($Disk.AccelerateOfficeActivation)
 					{
-						Line 2 "Accelerate Office Activation: Yes"
+						Line 2 "Accelerate Office Activation`t`t`t: Yes"
 					}
 					Else
 					{
-						Line 2 "Accelerate Office Activation: No"
+						Line 2 "Accelerate Office Activation`t`t`t: No"
 					}
 				}
 
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Auto Update Tab"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Auto Update Tab"
 				If($Disk.activationDateEnabled -eq "0")
 				{
-					Line 2 "Enable automatic updates for the vDisk: " -nonewline
+					Line 2 "Enable automatic updates for the vDisk`t`t: " -nonewline
 					If($Disk.autoUpdateEnabled -eq "1")
 					{
 						Line 0 "Yes"
@@ -2920,7 +3101,7 @@ Function ProcessvDisksinFarm
 				}
 				Else
 				{
-					Line 2 "Enable automatic updates for the vDisk: " -nonewline
+					Line 2 "Enable automatic updates for the vDisk`t`t: " -nonewline
 					If($Disk.autoUpdateEnabled -eq "1")
 					{
 						Line 0 "Yes"
@@ -2929,12 +3110,12 @@ Function ProcessvDisksinFarm
 					{
 						Line 0 "No"
 					}
-					Line 2 "Schedule the next vDisk update to occur on: $($Disk.activeDate)"
+					Line 2 "Schedule the next vDisk update to occur on`t: $($Disk.activeDate)"
 				}
 				#process Versions menu
 				#get versions info
 				#thanks to the PVS Product team for their help in understanding the Versions information
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing vDisk Versions"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing vDisk Versions"
 				$error.Clear()
 				$MCLIGetResult = Mcli-Get DiskVersion -p diskLocatorName="$($Disk.diskLocatorName)",storeName="$($disk.storeName)",siteName="$($disk.siteName)"
 				If($error.Count -eq 0)
@@ -2990,7 +3171,7 @@ Function ProcessvDisksinFarm
 							}
 						}
 						
-						Line 2 "Boot production devices from version: " -NoNewLine
+						Line 2 "Boot production devices from version`t`t: " -NoNewLine
 						If($BootOverride)
 						{
 							Line 0 $BootingVersion
@@ -3004,8 +3185,8 @@ Function ProcessvDisksinFarm
 						$VersionFlag = $False
 						ForEach($DiskVersion in $DiskVersions)
 						{
-							Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing vDisk Version $($DiskVersion.version)"
-							Line 2 "Version: " -NoNewLine
+							Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing vDisk Version $($DiskVersion.version)"
+							Line 2 "Version`t`t`t`t`t`t: " -NoNewLine
 							If($DiskVersion.version -eq $BootingVersion)
 							{
 								Line 0 "$($DiskVersion.version) (Current booting version)"
@@ -3024,13 +3205,13 @@ Function ProcessvDisksinFarm
 								}
 								$null = $Script:VersionsToMerge.Add($obj1)
 							}
-							Line 2 "Created: " $DiskVersion.createDate
+							Line 2 "Created`t`t`t`t`t`t: " $DiskVersion.createDate
 							If(![String]::IsNullOrEmpty($DiskVersion.scheduledDate))
 							{
-								Line 2 "Released: " $DiskVersion.scheduledDate
+								Line 2 "Released`t`t`t`t`t: " $DiskVersion.scheduledDate
 							}
-							Line 2 "Devices: " $DiskVersion.deviceCount
-							Line 2 "Access: " -NoNewLine
+							Line 2 "Devices`t`t`t`t`t`t: " $DiskVersion.deviceCount
+							Line 2 "Access`t`t`t`t`t`t: " -NoNewLine
 							Switch ($DiskVersion.access)
 							{
 								"0" {Line 0 "Production"; Break}
@@ -3043,7 +3224,7 @@ Function ProcessvDisksinFarm
 								"7" {Line 0 "Test"; Break}
 								Default {Line 0 "Access could not be determined: $($DiskVersion.access)"; Break}
 							}
-							Line 2 "Type: " -NoNewLine
+							Line 2 "Type`t`t`t`t`t`t: " -NoNewLine
 							Switch ($DiskVersion.type)
 							{
 								"0" {Line 0 "Base"; Break}
@@ -3055,70 +3236,70 @@ Function ProcessvDisksinFarm
 							}
 							If(![String]::IsNullOrEmpty($DiskVersion.description))
 							{
-								Line 2 "Properties: " $DiskVersion.description
+								Line 2 "Properties`t`t`t`t`t: " $DiskVersion.description
 							}
-							Line 2 "Can Delete: "  -NoNewLine
+							Line 2 "Can Delete`t`t`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.canDelete)
 							{
 								0 {Line 0 "No"; Break}
 								1 {Line 0 "Yes"; Break}
 							}
-							Line 2 "Can Merge: "  -NoNewLine
+							Line 2 "Can Merge`t`t`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.canMerge)
 							{
 								0 {Line 0 "No"; Break}
 								1 {Line 0 "Yes"; Break}
 							}
-							Line 2 "Can Merge Base: "  -NoNewLine
+							Line 2 "Can Merge Base`t`t`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.canMergeBase)
 							{
 								0 {Line 0 "No"; Break}
 								1 {Line 0 "Yes"; Break}
 							}
-							Line 2 "Can Promote: "  -NoNewLine
+							Line 2 "Can Promote`t`t`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.canPromote)
 							{
 								0 {Line 0 "No"; Break}
 								1 {Line 0 "Yes"; Break}
 							}
-							Line 2 "Can Revert back to Test: "  -NoNewLine
+							Line 2 "Can Revert back to Test`t`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.canRevertTest)
 							{
 								0 {Line 0 "No"; Break}
 								1 {Line 0 "Yes"; Break}
 							}
-							Line 2 "Can Revert back to Maintenance: "  -NoNewLine
+							Line 2 "Can Revert back to Maintenance`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.canRevertMaintenance)
 							{
 								0 {Line 0 "No"; Break}
 								1 {Line 0 "Yes"; Break}
 							}
-							Line 2 "Can Set Scheduled Date: "  -NoNewLine
+							Line 2 "Can Set Scheduled Date`t`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.canSetScheduledDate)
 							{
 								0 {Line 0 "No"; Break}
 								1 {Line 0 "Yes"; Break}
 							}
-							Line 2 "Can Override: "  -NoNewLine
+							Line 2 "Can Override`t`t`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.canOverride)
 							{
 								0 {Line 0 "No"; Break}
 								1 {Line 0 "Yes"; Break}
 							}
-							Line 2 "Is Pending: "  -NoNewLine
+							Line 2 "Is Pending`t`t`t`t`t: "  -NoNewLine
 							Switch ($DiskVersion.isPending)
 							{
 								0 {Line 0 "No, version Scheduled Date has occurred"; Break}
 								1 {Line 0 "Yes, version Scheduled Date has not occurred"; Break}
 							}
-							Line 2 "Replication Status: " -NoNewLine
+							Line 2 "Replication Status`t`t`t`t: " -NoNewLine
 							Switch ($DiskVersion.goodInventoryStatus)
 							{
 								0 {Line 0 "Not available on all servers"; Break}
 								1 {Line 0 "Available on all servers"; Break}
 								Default {Line 0 "Replication status could not be determined: $($DiskVersion.goodInventoryStatus)"; Break}
 							}
-							Line 2 "Disk Filename: " $DiskVersion.diskFileName
+							Line 2 "Disk Filename`t`t`t`t`t: " $DiskVersion.diskFileName
 							Line 0 ""
 						}
 					}
@@ -3130,14 +3311,14 @@ Function ProcessvDisksinFarm
 				}
 				
 				#process vDisk Load Balancing Menu
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing vDisk Load Balancing Menu"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing vDisk Load Balancing Menu"
 				If(![String]::IsNullOrEmpty($Disk.serverName))
 				{
 					Line 2 "Use this server to provide the vDisk: " $Disk.serverName
 				}
 				Else
 				{
-					Line 2 "Subnet Affinity: " -nonewline
+					Line 2 "Subnet Affinity`t`t`t`t`t: " -nonewline
 					Switch ($Disk.subnetAffinity)
 					{
 						0 {Line 0 "None"; Break}
@@ -3145,7 +3326,7 @@ Function ProcessvDisksinFarm
 						2 {Line 0 "Fixed"; Break}
 						Default {Line 0 "Subnet Affinity could not be determined: $($Disk.subnetAffinity)"; Break}
 					}
-					Line 2 "Rebalance Enabled: " -nonewline
+					Line 2 "Rebalance Enabled`t`t`t`t: " -nonewline
 					If($Disk.rebalanceEnabled -eq "1")
 					{
 						Line 0 "Yes"
@@ -3166,10 +3347,13 @@ Function ProcessvDisksinFarm
 	# http://blogs.citrix.com/2013/07/03/pvs-internals-2-how-to-properly-size-your-memory/
 	[decimal]$RecRAM = ((2 + ($NumberofvDisks * 2)) * 1.15)
 	$RecRAM = "{0:N0}" -f $RecRAM
-	Line 1 "Recommended RAM for each PVS Server using XenDesktop vDisks: $($RecRAM)GB"
+	Line 1 "Recommended RAM for each PVS Server using XenDesktop vDisks  : $($RecRAM)GB"
 	[decimal]$RecRAM = ((2 + ($NumberofvDisks * 4)) * 1.15)
 	$RecRAM = "{0:N0}" -f $RecRAM
-	Line 1 "Recommended RAM for each PVS Server using XenApp vDisks: $($RecRAM)GB"
+	Line 1 "Recommended RAM for each PVS Server using XenApp vDisks      : $($RecRAM)GB"
+	[decimal]$RecRAM = ((2 + (($NumberofvDisks * 4) + ($NumberofvDisks * 2))) * 1.15)
+	$RecRAM = "{0:N0}" -f $RecRAM
+	Line 1 "Recommended RAM for each PVS Server using XA & XD vDisks     : $($RecRAM)GB"
 	Line 0 ""
 	Line 1 "This script is not able to tell if a vDisk is running XenDesktop or XenApp."
 	Line 1 "The RAM calculation is done based on both scenarios. The original formula is:"
@@ -3184,7 +3368,7 @@ Function ProcessvDisksinFarm
 Function ProcessStores
 {
 	#process the stores now
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Stores"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Stores"
 	Line 0 "Stores Properties"
 	$GetWhat = "Store"
 	$GetParam = ""
@@ -3194,11 +3378,11 @@ Function ProcessStores
 	{
 		ForEach($Store in $Stores)
 		{
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Store $($Store.StoreName)"
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing General Tab"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Store $($Store.StoreName)"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing General Tab"
 			Line 1 "Name: " $Store.StoreName
 			
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Servers Tab"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Servers Tab"
 			Line 1 "Servers"
 			#find the servers (and the site) that serve this store
 			$GetWhat = "Server"
@@ -3210,7 +3394,7 @@ Function ProcessStores
 			{
 				ForEach($Server in $Servers)
 				{
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Server $($Server.serverName)"
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Server $($Server.serverName)"
 					$Temp = $Server.serverName
 					$GetWhat = "ServerStore"
 					$GetParam = "serverName = $Temp"
@@ -3232,7 +3416,7 @@ Function ProcessStores
 				Line 3 $StoreServer
 			}
 
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Processing Paths Tab"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Paths Tab"
 			Line 1 "Paths"
 
 			#Run through the servers again and test each one for the path
@@ -3297,14 +3481,14 @@ Function ProcessStores
 		Line 1 "There are no Stores configured"
 	}
 	Line 0 ""
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
 #region appendix A
 Function OutputAppendixA
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix A Advanced Server Items (Server/Network)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix A Advanced Server Items (Server/Network)"
 	#sort the array by servername
 	$Script:AdvancedItems1 = $Script:AdvancedItems1 | Sort-Object ServerName
 	
@@ -3330,15 +3514,15 @@ Function OutputAppendixA
 	}
 	Line 0 ""
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix A - Advanced Server Items (Server/Network)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix A - Advanced Server Items (Server/Network)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
 #region appendix B
 Function OutputAppendixB
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix B Advanced Server Items (Pacing/Device)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix B Advanced Server Items (Pacing/Device)"
 	#sort the array by servername
 	$Script:AdvancedItems2 = $Script:AdvancedItems2 | Sort-Object ServerName
 	
@@ -3364,15 +3548,15 @@ Function OutputAppendixB
 	}
 	Line 0 ""
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix B - Advanced Server Items (Pacing/Device)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix B - Advanced Server Items (Pacing/Device)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
 #region appendix C
 Function OutputAppendixC
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix C Config Wizard Items"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix C Config Wizard Items"
 
 	#sort the array by servername
 	$Script:ConfigWizItems = $Script:ConfigWizItems | Sort-Object ServerName
@@ -3385,8 +3569,8 @@ Function OutputAppendixC
 	
 	Line 0 "Appendix C - Configuration Wizard Settings"
 	Line 0 ""
-	Line 1 "Server Name      DHCP        PXE       TFTP    User                                               " 
-	Line 1 "                 Services    Services  Option  Account                                            "
+	Line 1 "Server Name      DHCP        PXE        TFTP    User                                               " 
+	Line 1 "                 Services    Services   Option  Account                                            "
 	Line 1 "================================================================================================"
 
 	If($Script:ConfigWizItems)
@@ -3403,15 +3587,15 @@ Function OutputAppendixC
 		Line 1 "<None found>"
 	}
 	Line 0 ""
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix C - Config Wizard Items"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix C - Config Wizard Items"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
 #region appendix D
 Function OutputAppendixD
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix D Server Bootstrap Items"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix D Server Bootstrap Items"
 
 	#sort the array by bootstrapname and servername
 	$Script:BootstrapItems = $Script:BootstrapItems | Sort-Object BootstrapName, ServerName
@@ -3441,15 +3625,15 @@ Function OutputAppendixD
 	}
 	Line 0 ""
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix D - Server Bootstrap Items"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix D - Server Bootstrap Items"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
 #region appendix E
 Function OutputAppendixE
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix E DisableTaskOffload Setting"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix E DisableTaskOffload Setting"
 
 	#sort the array by bootstrapname and servername
 	$Script:TaskOffloadItems = $Script:TaskOffloadItems | Sort-Object ServerName
@@ -3481,15 +3665,15 @@ Function OutputAppendixE
 	}
 	Line 0 ""
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix E - DisableTaskOffload Setting"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix E - DisableTaskOffload Setting"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
 #region appendix F
 Function OutputAppendixF
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix F PVS Services"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix F PVS Services"
 
 	#sort the array by displayname and servername
 	$Script:PVSServiceItems = $Script:PVSServiceItems | Sort-Object DisplayName, ServerName
@@ -3522,15 +3706,15 @@ Function OutputAppendixF
 	}
 	Line 0 ""
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix F - PVS Services"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix F - PVS Services"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
 #region appendix F2
 Function OutputAppendixF2
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix F2 PVS Services Failure Actions"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix F2 PVS Services Failure Actions"
 	#array is already sorted in Function OutputAppendixF
 	
 	Line 0 "Appendix F2 - Server PVS Service Items Failure Actions"
@@ -3551,15 +3735,15 @@ Function OutputAppendixF2
 	}
 	Line 0 ""
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix F2 - PVS Services Failure Actions"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix F2 - PVS Services Failure Actions"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
 #region appendix G
 Function OutputAppendixG
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix G vDisks to Merge"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix G vDisks to Merge"
 
 	#sort the array
 	$Script:VersionsToMerge = $Script:VersionsToMerge | Sort-Object
@@ -3587,15 +3771,15 @@ Function OutputAppendixG
 	}
 	Line 0 ""
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix G - vDisks to Merge"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix G - vDisks to Merge"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
 #region appendix H
 Function OutputAppendixH
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix H Empty Device Collections"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix H Empty Device Collections"
 
 	#sort the array
 	$Script:EmptyDeviceCollections = $Script:EmptyDeviceCollections | Sort-Object CollectionName
@@ -3623,15 +3807,15 @@ Function OutputAppendixH
 	}
 	Line 0 ""
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix G - Empty Device Collections"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix G - Empty Device Collections"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
 #region appendix I 
 Function ProcessvDisksWithNoAssociation
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finding vDisks with no Target Device Associations"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finding vDisks with no Target Device Associations"
 	$UnassociatedvDisks = New-Object System.Collections.ArrayList
 	$GetWhat = "diskLocator"
 	$GetParam = ""
@@ -3640,7 +3824,7 @@ Function ProcessvDisksWithNoAssociation
 	
 	If($Null -eq $DiskLocators)
 	{
-		Write-Host -foregroundcolor Red -backgroundcolor Black "VERBOSE: $(Get-Date): No DiskLocators Found"
+		Write-Host -foregroundcolor Red -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): No DiskLocators Found"
 		OutputAppendixI $Null
 	}
 	Else
@@ -3674,13 +3858,13 @@ Function ProcessvDisksWithNoAssociation
 		
 		If($UnassociatedvDisks.Count -gt 0)
 		{
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Found $($UnassociatedvDisks.Count) vDisks with no Target Device Associations"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Found $($UnassociatedvDisks.Count) vDisks with no Target Device Associations"
 			OutputAppendixI $UnassociatedvDisks
 		}
 		Else
 		{
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): All vDisks have Target Device Associations"
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): All vDisks have Target Device Associations"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 			OutputAppendixI $Null
 		}
 	}
@@ -3690,7 +3874,7 @@ Function OutputAppendixI
 {
 	Param([array]$vDisks)
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix I Unassociated vDisks"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix I Unassociated vDisks"
 
 	Line 0 "Appendix I - vDisks with no Target Device Associations"
 	Line 0 ""
@@ -3720,15 +3904,15 @@ Function OutputAppendixI
 	
 	Line 0 ""
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix I - Unassociated vDisks"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix I - Unassociated vDisks"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
 #region appendix J
 Function OutputAppendixJ
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix J Bad Streaming IP Addresses"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix J Bad Streaming IP Addresses"
 
 	#sort the array by bootstrapname and servername
 	$Script:BadIPs = $Script:BadIPs | Sort-Object ServerName, IPAddress
@@ -3764,15 +3948,15 @@ Function OutputAppendixJ
 	}
 	Line 0 ""
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix J Bad Streaming IP Addresses"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix J Bad Streaming IP Addresses"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
 #region appendix K
 Function OutputAppendixK
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix K Misc Registry Items"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix K Misc Registry Items"
 
 	#sort the array by regkey, regvalue and servername
 	$Script:MiscRegistryItems = $Script:MiscRegistryItems | Sort-Object RegKey, RegValue, ServerName
@@ -3818,15 +4002,15 @@ Function OutputAppendixK
 	}
 	Line 0 ""
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix K Misc Registry Items"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix K Misc Registry Items"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
 #region appendix L
 Function OutputAppendixL
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix L vDisks Configured for Server-Side Caching"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix L vDisks Configured for Server-Side Caching"
 	#sort the array 
 	$Script:CacheOnServer = $Script:CacheOnServer | Sort-Object StoreName,SiteName,vDiskName
 	
@@ -3857,8 +4041,8 @@ Function OutputAppendixL
 	}
 	Line 0 ""
 	
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix L vDisks Configured for Server-Side Caching"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix L vDisks Configured for Server-Side Caching"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
@@ -3866,7 +4050,7 @@ Function OutputAppendixL
 Function OutputAppendixM
 {
 	#added in V1.16
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix M Microsoft Hotfixes and Updates"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix M Microsoft Hotfixes and Updates"
 
 	#sort the array by hotfixid and servername
 	$Script:MSHotfixes = $Script:MSHotfixes | Sort-Object HotFixID, ServerName
@@ -3911,8 +4095,8 @@ Function OutputAppendixM
 	}
 	Line 0 ""
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix M Microsoft Hotfixes and Updates"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix M Microsoft Hotfixes and Updates"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
@@ -3920,7 +4104,7 @@ Function OutputAppendixM
 Function OutputAppendixN
 {
 	#added in V1.16
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix N Windows Installed Components"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix N Windows Installed Components"
 
 	$Script:WinInstalledComponents = $Script:WinInstalledComponents | Sort-Object DisplayName, Name, DDCName
 	
@@ -3939,11 +4123,11 @@ Function OutputAppendixN
 	Else
 	{
 		Line 0 ""
-		Line 1 "Display Name                                       Name                          Server Name      Feature Type   "
-		Line 1 "================================================================================================================="
-		#       12345678901234567890123456789012345678901234567890S123456789012345678901234567890123456789012345SS123456789012345
-		#       Graphical Management Tools and Infrastructure      NET-Framework-45-Features     XXXXXXXXXXXXXXX  Role Service
-		#       50                                                 30                            15               15
+		Line 1 "Display Name                                       Name                           Server Name      Feature Type   "
+		Line 1 "=================================================================================================================="
+		#       12345678901234567890123456789012345678901234567890S123456789012345678901234567890S123456789012345SS123456789012345
+		#       Graphical Management Tools and Infrastructure      NET-Framework-45-Features      XXXXXXXXXXXXXXX  Role Service
+		#       50                                                 30                             15               15
 		$Save = ""
 		$First = $True
 		If($Script:WinInstalledComponents)
@@ -3955,7 +4139,7 @@ Function OutputAppendixN
 					Line 0 ""
 				}
 
-				Line 1 ( "{0,-50} {1,-30} {2,-15} {3,-15}" -f `
+				Line 1 ( "{0,-50} {1,-30} {2,-15}  {3,-15}" -f `
 				$Item.DisplayName, $Item.Name, $Item.ServerName, $Item.FeatureType)
 				$Save = "$($Item.DisplayName)$($Item.Name)"
 				If($First)
@@ -3971,8 +4155,8 @@ Function OutputAppendixN
 		Line 0 ""
 	}
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix N Windows Installed Components"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix N Windows Installed Components"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
@@ -3980,7 +4164,7 @@ Function OutputAppendixN
 Function OutputAppendixO
 {
 	#added in V1.16
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Create Appendix O PVS Processes"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix O PVS Processes"
 
 	$Script:PVSProcessItems = $Script:PVSProcessItems | Sort-Object ProcessName, ServerName
 	
@@ -4023,25 +4207,177 @@ Function OutputAppendixO
 	}
 	Line 0 ""
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finished Creating Appendix O PVS Processes"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix O PVS Processes"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
+}
+#endregion
+
+#region appendix p
+Function OutputAppendixP
+{
+	#added in V1.23
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix P Items to Review"
+
+	$Script:ItemsToReview = $Script:ItemsToReview | Sort-Object ItemText
+	
+	If($CSV)
+	{
+		$File = "$($Script:pwdpath)\$($Script:farm.FarmName)_HealthCheck_AppendixP_ItemsToReview.csv"
+		$Script:ItemsToReview | Export-CSV -Force -Encoding ASCII -NoTypeInformation -Path $File
+	}
+	
+	Line 0 "Appendix P - Items to Review"
+	Line 0 ""
+	Line 1 "Item                                   "
+	Line 1 "======================================="
+	#       123456789012345678901234567890134567890
+	#       ItemText
+	If($Script:ItemsToReview)
+	{
+		ForEach($Item in $Script:ItemsToReview)
+		{
+			Line 1 ( "{0,-40}" -f $Item.ItemText)
+		}
+	}
+	Else
+	{
+		Line 1 "<None found>"
+	}
+	Line 0 ""
+
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix P Items to Review"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
+}
+#endregion
+
+#region appendix Q
+Function OutputAppendixQ
+{
+	#added in V1.23
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix Q Server Items to Review"
+
+	$Script:ServerComputerItemsToReview  = $Script:ServerComputerItemsToReview | Sort-Object ServerName
+	$Script:ServerDriveItemsToReview     = $Script:ServerDriveItemsToReview | Sort-Object DriveCaption, ServerName
+	$Script:ServerProcessorItemsToReview = $Script:ServerProcessorItemsToReview | Sort-Object ServerName
+	$Script:ServerNICItemsToReview       = $Script:ServerNICItemsToReview | Sort-Object ServerName
+	
+	If($CSV)
+	{
+		$File = "$($Script:pwdpath)\$($Script:farm.FarmName)_HealthCheck_AppendixQ_ServerComputerItemsToReview.csv"
+		$Script:ServerComputerItemsToReview | Export-CSV -Force -Encoding ASCII -NoTypeInformation -Path $File
+
+		$File = "$($Script:pwdpath)\$($Script:farm.FarmName)_HealthCheck_AppendixQ_ServerDriveItemsToReview.csv"
+		$Script:ServerDriveItemsToReview | Export-CSV -Force -Encoding ASCII -NoTypeInformation -Path $File
+
+		$File = "$($Script:pwdpath)\$($Script:farm.FarmName)_HealthCheck_AppendixQ_ServerProcessorItemsToReview.csv"
+		$Script:ServerProcessorItemsToReview | Export-CSV -Force -Encoding ASCII -NoTypeInformation -Path $File
+
+		$File = "$($Script:pwdpath)\$($Script:farm.FarmName)_HealthCheck_AppendixQ_ServerNICItemsToReview.csv"
+		$Script:ServerNICItemsToReview | Export-CSV -Force -Encoding ASCII -NoTypeInformation -Path $File
+	}
+	
+	Line 0 "Appendix Q - Server Items to Review"
+	Line 0 ""
+	Line 1 "Computer Items to Review"
+	Line 2 "Server Name     Operating System                        Power Plan        RAM   Physical  Logical"
+	Line 2 "                                                                          (GB)  Procs     Procs  "
+	Line 2 "================================================================================================="
+	#       123456789012345S12345678901234567890123456789012345678SS1234567890123456SS1234SS12345678SS1234567
+	#       XXXXXXXXXXXXXXX Microsoft Windows Server 2019 Standard High performance  9999  999       999
+	#       15
+	If($Script:ServerComputerItemsToReview)
+	{
+		ForEach($Item in $Script:ServerComputerItemsToReview)
+		{
+			Line 2 ( "{0,-15} {1,-38}  {2,-16}  {3,4}  {4,8}  {5,7}" -f `
+			$Item.ServerName, $Item.OperatingSystem, $Item.PowerPlan, $Item.TotalRam, $Item.PhysicalProcessors, $Item.LogicalProcessors)
+		}
+	}
+	Else
+	{
+		Line 2 "<None found>"
+	}
+	Line 0 ""
+
+	Line 1 "Drive Items to Review"
+	Line 2 "Server Name     Caption  Size (GB)"
+	Line 2 "=============================================="
+	#       123456789012345S1234567SS123456789
+	#       XXXXXXXXXXXXXXX C:            9999
+	#       15
+	If($Script:ServerDriveItemsToReview)
+	{
+		ForEach($Item in $Script:ServerDriveItemsToReview)
+		{
+			Line 2 ( "{0,-15} {1,-7}  {2,9}" -f `
+			$Item.ServerName, $Item.DriveCaption, $Item.DriveSize)
+		}
+	}
+	Else
+	{
+		Line 2 "<None found>"
+	}
+	Line 0 ""
+
+	Line 1 "Processor Items to Review"
+	Line 2 "Server Name     Cores  Logical Procs"
+	Line 2 "===================================="
+	#       123456789012345S12345SS1234567890123
+	#       XXXXXXXXXXXXXXX  9999           9999
+	#       15
+	If($Script:ServerProcessorItemsToReview)
+	{
+		ForEach($Item in $Script:ServerProcessorItemsToReview)
+		{
+			Line 2 ( "{0,-15} {1,5}  {2,13}" -f `
+			$Item.ServerName, $Item.Cores , $Item.LogicalProcs)
+		}
+	}
+	Else
+	{
+		Line 2 "<None found>"
+	}
+	Line 0 ""
+
+	Line 1 "NIC Items to Review"
+	Line 2 "Server Name     NIC Name                                    Manufacturer          Power Mgmt  RSS     "
+	Line 2 "======================================================================================================"
+	#       123456789012345S123456789012345678901234567890123456789012SS12345678901234567890SS1234567890SS12345678
+	#       XXXXXXXXXXXXXXX Intel(R) 82574L Gigabit Network Connection  Intel Corporation     Disabled    Disabled
+	#       15              42                                          20                    9           8
+	If($Script:ServerNICItemsToReview)
+	{
+		ForEach($Item in $Script:ServerNICItemsToReview)
+		{
+			Line 2 ( "{0,-15} {1,-42}  {2,-20}  {3,-10}  {4,-8}" -f `
+			$Item.ServerName, $Item.Name, $Item.Manufacturer, $Item.PowerMgmt, $Item.RSS)
+		}
+	}
+	Else
+	{
+		Line 2 "<None found>"
+	}
+	Line 0 ""
+
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix Q Server Items to Review"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 #endregion
 
 #region save and close document	
 Function SaveandCloseTextDocument
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Finishing up document"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finishing up document"
 	#end of document processing
 
 	If( $Host.Version.CompareTo( [System.Version]'2.0' ) -eq 0 )
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Saving for PoSH V2"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Saving for PoSH V2"
 		Write-Output $global:Output.ToString() | Out-File $Script:Filename1 2>$Null
 	}
 	Else
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Saving for PoSH V3 or later"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Saving for PoSH V3 or later"
 		Write-Output $global:Output.ToString() | Out-File $Script:Filename1 4>$Null
 	}
 }
@@ -4050,19 +4386,19 @@ Function SaveandCloseTextDocument
 #region script end
 Function ProcessScriptEnd
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Script has completed"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Script has completed"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 
 	$GotFile = $False
 
 	If(Test-Path "$($Script:FileName1)")
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): $($Script:FileName1) is ready for use"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): $($Script:FileName1) is ready for use"
 		$GotFile = $True
 	}
 	Else
 	{
-		Write-Warning "$(Get-Date): Unable to save the output file, $($Script:FileName1)"
+		Write-Warning "$(Get-Date -Format G): Unable to save the output file, $($Script:FileName1)"
 		Write-Error "Unable to save the output file, $($Script:FileName1)"
 	}
 
@@ -4074,14 +4410,14 @@ Function ProcessScriptEnd
 		SendEmail $emailAttachment
 	}
 
-	Write-Verbose "$(Get-Date): Script has completed"
-	Write-Verbose "$(Get-Date): "
+	Write-Verbose "$(Get-Date -Format G): Script has completed"
+	Write-Verbose "$(Get-Date -Format G): "
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): "
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 
 	#http://poshtips.com/measuring-elapsed-time-in-powershell/
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Script started: $($Script:StartTime)"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Script ended: $(Get-Date)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Script started: $($Script:StartTime)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Script ended: $(Get-Date)"
 	$runtime = $(Get-Date) - $Script:StartTime
 	$Str = [string]::format("{0} days, {1} hours, {2} minutes, {3}.{4} seconds", `
 		$runtime.Days, `
@@ -4089,7 +4425,7 @@ Function ProcessScriptEnd
 		$runtime.Minutes, `
 		$runtime.Seconds,
 		$runtime.Milliseconds)
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Elapsed time: $($Str)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Elapsed time: $($Str)"
 
 	If($Dev)
 	{
@@ -4146,11 +4482,11 @@ Function ProcessScriptEnd
 			try 
 			{
 				Stop-Transcript | Out-Null
-				Write-Verbose "$(Get-Date): $Script:LogPath is ready for use"
+				Write-Verbose "$(Get-Date -Format G): $Script:LogPath is ready for use"
 			} 
 			catch 
 			{
-				Write-Verbose "$(Get-Date): Transcript/log stop failed"
+				Write-Verbose "$(Get-Date -Format G): Transcript/log stop failed"
 			}
 		}
 	}
@@ -4164,7 +4500,7 @@ Function ProcessScriptEnd
 Function SendEmail
 {
 	Param([array]$Attachments)
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Prepare to email"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Prepare to email"
 
 	$emailAttachment = $Attachments
 	$emailSubject = $Script:Title
@@ -4204,28 +4540,28 @@ $Script:Title is attached.
 		
 		If($?)
 		{
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Email successfully sent using anonymous credentials"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Email successfully sent using anonymous credentials"
 		}
 		ElseIf(!$?)
 		{
 			$e = $error[0]
 
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Email was not sent:"
-			Write-Warning "$(Get-Date): Exception: $e.Exception" 
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Email was not sent:"
+			Write-Warning "$(Get-Date -Format G): Exception: $e.Exception" 
 		}
 	}
 	Else
 	{
 		If($UseSSL)
 		{
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Trying to send email using current user's credentials with SSL"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Trying to send email using current user's credentials with SSL"
 			Send-MailMessage -Attachments $emailAttachment -Body $emailBody -BodyAsHtml -From $From `
 			-Port $SmtpPort -SmtpServer $SmtpServer -Subject $emailSubject -To $To `
 			-UseSSL *>$Null
 		}
 		Else
 		{
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Trying to send email using current user's credentials without SSL"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Trying to send email using current user's credentials without SSL"
 			Send-MailMessage -Attachments $emailAttachment -Body $emailBody -BodyAsHtml -From $From `
 			-Port $SmtpPort -SmtpServer $SmtpServer -Subject $emailSubject -To $To *>$Null
 		}
@@ -4238,7 +4574,7 @@ $Script:Title is attached.
 			If($null -ne $e.Exception -and $e.Exception.ToString().Contains("5.7"))
 			{
 				#The server response was: 5.7.xx SMTP; Client was not authenticated to send anonymous mail during MAIL FROM
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Current user's credentials failed. Ask for usable credentials."
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Current user's credentials failed. Ask for usable credentials."
 
 				If($Dev)
 				{
@@ -4264,20 +4600,20 @@ $Script:Title is attached.
 
 				If($?)
 				{
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Email successfully sent using new credentials"
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Email successfully sent using new credentials"
 				}
 				ElseIf(!$?)
 				{
 					$e = $error[0]
 
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Email was not sent:"
-					Write-Warning "$(Get-Date): Exception: $e.Exception" 
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Email was not sent:"
+					Write-Warning "$(Get-Date -Format G): Exception: $e.Exception" 
 				}
 			}
 			Else
 			{
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Email was not sent:"
-				Write-Warning "$(Get-Date): Exception: $e.Exception" 
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Email was not sent:"
+				Write-Warning "$(Get-Date -Format G): Exception: $e.Exception" 
 			}
 		}
 	}
@@ -4367,7 +4703,7 @@ Function GetConfigWizardInfo
 		$TFTPOption = "No"
 	}
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Gather Config Wizard info for Appendix C"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Gather Config Wizard info for Appendix C"
 	$obj1 = [PSCustomObject] @{
 		ServerName        = $ComputerName
 		DHCPServicesValue = $DHCPServicesValue
@@ -4378,13 +4714,13 @@ Function GetConfigWizardInfo
 	$null = $Script:ConfigWizItems.Add($obj1)
 	
 	Line 2 "Configuration Wizard Settings"
-	Line 3 "DHCP Services: " $DHCPServices
-	Line 3 "PXE Services: " $PXEServices
-	Line 3 "User account: " $UserAccount
-	Line 3 "TFTP Option: " $TFTPOption
+	Line 3 "DHCP Services`t`t: " $DHCPServices
+	Line 3 "PXE Services`t`t: " $PXEServices
+	Line 3 "User account`t`t: " $UserAccount
+	Line 3 "TFTP Option`t`t: " $TFTPOption
 	If($TFTPOptionValue -eq 1)
 	{
-		Line 3 "TFTP Bootstrap Location: " $TFTPBootstrapLocation
+		Line 3 "TFTP Bootstrap Location`t: " $TFTPBootstrapLocation
 	}
 	
 	Line 0 ""
@@ -4394,7 +4730,7 @@ Function GetDisableTaskOffloadInfo
 {
 	Param([string]$ComputerName)
 	
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Gather TaskOffload info for Appendix E"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Gather TaskOffload info for Appendix E"
 	$TaskOffloadValue = Get-RegistryValue "HKLM:\SYSTEM\CurrentControlSet\Services\TCPIP\Parameters" "DisableTaskOffload" $ComputerName
 	
 	If($Null -eq $TaskOffloadValue)
@@ -4481,7 +4817,7 @@ Function GetMiscRegistryKeys
 	#HKLM:\SYSTEM\Currentcontrolset\services\PVSTSB\Parameters         InitTimeoutSec           
 	#HKLM:\SYSTEM\Currentcontrolset\services\PVSTSB\Parameters         MaxBindRetry      
 	
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Gather Misc Registry Key data for Appendix K"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Gather Misc Registry Key data for Appendix K"
 
 	#https://docs.citrix.com/en-us/provisioning/7-1/pvs-readme-7/7-fixed-issues.html
 	Get-RegKeyToObject "HKLM:\SOFTWARE\Citrix\ProvisioningServices" "AutoUpdateUserCache" $ComputerName
@@ -4770,7 +5106,7 @@ $currentPrincipal = New-Object Security.Principal.WindowsPrincipal( [Security.Pr
 
 If($currentPrincipal.IsInRole( [Security.Principal.WindowsBuiltInRole]::Administrator ))
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): This is an elevated PowerShell session"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): This is an elevated PowerShell session"
 }
 Else
 {
@@ -4786,7 +5122,7 @@ Else
 
 If($Folder -ne "")
 {
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Testing folder path"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Testing folder path"
 	#does it exist
 	If(Test-Path $Folder -EA 0)
 	{
@@ -4794,7 +5130,7 @@ If($Folder -ne "")
 		If(Test-Path $Folder -pathType Container -EA 0)
 		{
 			#it exists and it is a folder
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date): Folder path $Folder exists and is a folder"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Folder path $Folder exists and is a folder"
 		}
 		Else
 		{
@@ -4911,12 +5247,12 @@ If($Log)
 	try 
 	{
 		Start-Transcript -Path $Script:LogPath -Force -Verbose:$false | Out-Null
-		Write-Verbose "$(Get-Date): Transcript/log started at $Script:LogPath"
+		Write-Verbose "$(Get-Date -Format G): Transcript/log started at $Script:LogPath"
 		$Script:StartLog = $true
 	} 
 	catch 
 	{
-		Write-Verbose "$(Get-Date): Transcript/log failed at $Script:LogPath"
+		Write-Verbose "$(Get-Date -Format G): Transcript/log failed at $Script:LogPath"
 		$Script:StartLog = $false
 	}
 }
@@ -4929,23 +5265,28 @@ If($Dev)
 
 [string]$Script:RunningOS = (Get-WmiObject -class Win32_OperatingSystem -EA 0).Caption
 
-$Script:AdvancedItems1         = New-Object System.Collections.ArrayList
-$Script:AdvancedItems2         = New-Object System.Collections.ArrayList
-$Script:ConfigWizItems         = New-Object System.Collections.ArrayList
-$Script:BootstrapItems         = New-Object System.Collections.ArrayList
-$Script:TaskOffloadItems       = New-Object System.Collections.ArrayList
-$Script:PVSServiceItems        = New-Object System.Collections.ArrayList
-$Script:VersionsToMerge        = New-Object System.Collections.ArrayList
-$Script:NICIPAddresses         = @{}
-$Script:StreamingIPAddresses   = New-Object System.Collections.ArrayList
-$Script:BadIPs                 = New-Object System.Collections.ArrayList
-$Script:EmptyDeviceCollections = New-Object System.Collections.ArrayList
-$Script:MiscRegistryItems      = New-Object System.Collections.ArrayList
-$Script:CacheOnServer          = New-Object System.Collections.ArrayList
-$Script:MSHotfixes             = New-Object System.Collections.ArrayList
-$Script:WinInstalledComponents = New-Object System.Collections.ArrayList
-$Script:PVSProcessItems        = New-Object System.Collections.ArrayList
-$script:startTime              = Get-Date
+$Script:ItemsToReview                = New-Object System.Collections.ArrayList
+$Script:ServerComputerItemsToReview  = New-Object System.Collections.ArrayList
+$Script:ServerDriveItemsToReview     = New-Object System.Collections.ArrayList
+$Script:ServerProcessorItemsToReview = New-Object System.Collections.ArrayList
+$Script:ServerNICItemsToReview       = New-Object System.Collections.ArrayList
+$Script:AdvancedItems1               = New-Object System.Collections.ArrayList
+$Script:AdvancedItems2               = New-Object System.Collections.ArrayList
+$Script:ConfigWizItems               = New-Object System.Collections.ArrayList
+$Script:BootstrapItems               = New-Object System.Collections.ArrayList
+$Script:TaskOffloadItems             = New-Object System.Collections.ArrayList
+$Script:PVSServiceItems              = New-Object System.Collections.ArrayList
+$Script:VersionsToMerge              = New-Object System.Collections.ArrayList
+$Script:NICIPAddresses               = @{}
+$Script:StreamingIPAddresses         = New-Object System.Collections.ArrayList
+$Script:BadIPs                       = New-Object System.Collections.ArrayList
+$Script:EmptyDeviceCollections       = New-Object System.Collections.ArrayList
+$Script:MiscRegistryItems            = New-Object System.Collections.ArrayList
+$Script:CacheOnServer                = New-Object System.Collections.ArrayList
+$Script:MSHotfixes                   = New-Object System.Collections.ArrayList
+$Script:WinInstalledComponents       = New-Object System.Collections.ArrayList
+$Script:PVSProcessItems              = New-Object System.Collections.ArrayList
+$script:startTime                    = Get-Date
 
 # v1.17 - switch to using a StringBuilder for $global:Output
 [System.Text.StringBuilder] $global:Output = New-Object System.Text.StringBuilder( 16384 )
@@ -4970,38 +5311,42 @@ ProcessvDisksinFarm
 
 ProcessStores
 
-OutputAppendixA
+OutputAppendixA	#Appendix A - Advanced Server Items (Server/Network)
 
-OutputAppendixB
+OutputAppendixB	#Appendix B - Advanced Server Items (Pacing/Device)
 
-OutputAppendixC
+OutputAppendixC	#Appendix C - Configuration Wizard Settings
 
-OutputAppendixD
+OutputAppendixD	#Appendix D - Server Bootstrap Items
 
-OutputAppendixE
+OutputAppendixE	#Appendix E - DisableTaskOffload Settings
 
-OutputAppendixF
+OutputAppendixF	#Appendix F - Server PVS Service Items
 
-OutputAppendixF2
+OutputAppendixF2	#Appendix F2 - Server PVS Service Items Failure Actions
 
-OutputAppendixG
+OutputAppendixG	#Appendix G - vDisks to Consider Merging
 
-OutputAppendixH
+OutputAppendixH	#Appendix H - Empty Device Collections
 
-#outputs AppendixI
+#outputs Appendix I - vDisks with no Target Device Associations
 ProcessvDisksWithNoAssociation
 
-OutputAppendixJ
+OutputAppendixJ	#Appendix J - Bad Streaming IP Addresses
 
-OutputAppendixK
+OutputAppendixK	#Appendix K - Misc Registry Items
 
-OutputAppendixL
+OutputAppendixL	#Appendix L - vDisks Configured for Server Side-Caching
 
-OutputAppendixM
+OutputAppendixM	#Appendix M - Microsoft Hotfixes and Updates
 
-OutputAppendixN
+OutputAppendixN	#Appendix N - Windows Installed Components
 
-OutputAppendixO
+OutputAppendixO	#Appendix O - PVS Processes
+
+OutputAppendixP	#Appendix P - Items to Review
+
+OutputAppendixQ	#Appendix Q - Server Items to Review
 
 SaveandCloseTextDocument
 

@@ -3,6 +3,43 @@
 #@carlwebster on Twitter
 #http://www.CarlWebster.com
 
+#Version 1.23
+#	Added Appendix P - Items to Review
+#		Auditing is not enabled
+#		Offline database support is not enabled
+#		Problem report Citrix Username is <Name/ID>
+#		<ServerName> event logging is not enabled
+#	Added Appendix Q - Server Items to Review
+#		Computer Items to Review
+#		Drive Items to Review
+#		Processor Items to Review
+#		NIC Items to Review
+#	Added the following CSV files:
+#		PVSFarm_HealthCheck_AppendixP_ItemsToReview.csv
+#		PVSFarm_HealthCheck_AppendixQ_ServerComputerItemsToReview.csv
+#		PVSFarm_HealthCheck_AppendixQ_ServerDriveItemsToReview.csv
+#		PVSFarm_HealthCheck_AppendixQ_ServerProcessorItemsToReview.csv
+#		PVSFarm_HealthCheck_AppendixQ_ServerNICItemsToReview.csv
+#	Added to the Farm info, the Security and Groups tabs (requested by JLuhring)
+#	Added to the Farm info if the PVS version is >= 7.11, the Problem Report Citrix Username (requested by JLuhring)
+#	Added to the vDisks in Farm section:
+#		Recommended RAM for each PVS Server using XA & XD vDisks
+#	Added to the Computer Hardware section, the server's Power Plan (requested by JLuhring)
+#	Changed all Verbose statements from Get-Date to Get-Date -Format G as requested by Guy Leech
+#	Changed the default Domain value to $env:UserDomain
+#	Changed the default User value to $env:username
+#		Combine the two values for the call to Get-Credential
+#	Changed the variable PVSFullVersion to type [version] for better comparisons
+#	Check for the McliPSSnapIn snapin before installing the .Net snapins
+#		If the snapin already exists, there was no need to install and register the .Net V2 and V4 snapins for every script run
+#	Cleaned up alignment for most of the output
+#	Removed the Password parameter to keep from having the password entered as plaintext
+#		Use Get-Credential and code from Frank Lindenblatt to get the password from the $credential object
+#		The mcli-run SetupConnection uses only a plaintext password
+#	Reordered parameters in an order recommended by Guy Leech
+#	Updated the help text
+#	Updated the ReadMe file
+
 #Version 1.22 28-Apr-2020
 #	Add -Dev, -Log, and -ScriptInfo parameters (Thanks to Guy Leech for the push)
 #	Add Function ProcessScriptEnd
