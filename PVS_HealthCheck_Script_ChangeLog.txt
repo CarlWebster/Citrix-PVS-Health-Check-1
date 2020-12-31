@@ -20,6 +20,7 @@
 #		PVSFarm_HealthCheck_AppendixQ_ServerDriveItemsToReview.csv
 #		PVSFarm_HealthCheck_AppendixQ_ServerProcessorItemsToReview.csv
 #		PVSFarm_HealthCheck_AppendixQ_ServerNICItemsToReview.csv
+#	Added testing for standard Windows folders to keep people from running the script in folders like c:\windows\system32
 #	Added to the Farm info, the Security and Groups tabs (requested by JLuhring)
 #	Added to the Farm info if the PVS version is >= 7.11, the Problem Report Citrix Username (requested by JLuhring)
 #	Added to the vDisks in Farm section:
@@ -33,6 +34,7 @@
 #	Check for the McliPSSnapIn snapin before installing the .Net snapins
 #		If the snapin already exists, there was no need to install and register the .Net V2 and V4 snapins for every script run
 #	Cleaned up alignment for most of the output
+#	Fixed the missing $DatacenterLicense variable (found by SHurjuk)
 #	Removed the Password parameter to keep from having the password entered as plaintext
 #		Use Get-Credential and code from Frank Lindenblatt to get the password from the $credential object
 #		The mcli-run SetupConnection uses only a plaintext password

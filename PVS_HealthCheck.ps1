@@ -315,6 +315,7 @@ Param(
 #		PVSFarm_HealthCheck_AppendixQ_ServerDriveItemsToReview.csv
 #		PVSFarm_HealthCheck_AppendixQ_ServerProcessorItemsToReview.csv
 #		PVSFarm_HealthCheck_AppendixQ_ServerNICItemsToReview.csv
+#	Added testing for standard Windows folders to keep people from running the script in folders like c:\windows\system32
 #	Added to the Farm info, the Security and Groups tabs (requested by JLuhring)
 #	Added to the Farm info if the PVS version is >= 7.11, the Problem Report Citrix Username (requested by JLuhring)
 #	Added to the vDisks in Farm section:
@@ -328,6 +329,7 @@ Param(
 #	Check for the McliPSSnapIn snapin before installing the .Net snapins
 #		If the snapin already exists, there was no need to install and register the .Net V2 and V4 snapins for every script run
 #	Cleaned up alignment for most of the output
+#	Fixed the missing $DatacenterLicense variable (found by SHurjuk)
 #	Removed the Password parameter to keep from having the password entered as plaintext
 #		Use Get-Credential and code from Frank Lindenblatt to get the password from the $credential object
 #		The mcli-run SetupConnection uses only a plaintext password
@@ -1053,6 +1055,16 @@ Function ProcessPVSFarm
 	}
 	ElseIf($Script:PVSFullVersion -ge "7.13")
 	{
+		#	Fixed in the 1.23 the missing $DatacenterLicense variable (found by SHurjuk)
+
+		If($farm.licenseTradeUp -eq "1" -or $farm.licenseTradeUp -eq $True)
+		{
+			$DatacenterLicense = "Yes"
+		}
+		Else
+		{
+			$DatacenterLicense = "No"
+		}
 		Line 1 "Use Datacenter licenses for desktops if no Desktop licenses are available: " $DatacenterLicense
 	}
 
@@ -5176,6 +5188,32 @@ If($Script:pwdpath.EndsWith("\"))
 {
 	#remove the trailing \
 	$Script:pwdpath = $Script:pwdpath.SubString(0, ($Script:pwdpath.Length - 1))
+}
+
+#V1.23, add testing for standard Windows folders to keep people from running the script in c:\windows\system32
+$BadDir = $False
+If($Script:pwdpath -like "*Program*") #should catch Program Files, Program Files (x86), and ProgramData
+{
+	$BadDir = $True
+}
+If($Script:pwdpath -like "*PerfLogs*")
+{
+	$BadDir = $True
+}
+If($Script:pwdpath -like "*Windows*")
+{
+	$BadDir = $True
+}
+
+#exit script if $BadDir is true
+If($BadDir)
+{
+	Write-Host "$(Get-Date): 
+	
+	You are running the script from a standard Windows folder. 
+	Script will exit.
+	"
+	Exit
 }
 
 If(![String]::IsNullOrEmpty($SmtpServer) -and [String]::IsNullOrEmpty($From) -and [String]::IsNullOrEmpty($To))
