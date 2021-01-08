@@ -238,7 +238,7 @@
 	NAME: PVS_HealthCheck.ps1
 	VERSION: 1.23
 	AUTHOR: Carl Webster (with a lot of help from BG a, now former, Citrix dev)
-	LASTEDIT: December 31, 2020
+	LASTEDIT: January 8, 2021
 #>
 
 
@@ -298,7 +298,7 @@ Param(
 #released to the community on February 2, 2016
 #
 
-#Version 1.23
+#Version 1.23 8-Jan-2021
 #	Added Appendix P - Items to Review
 #		Auditing is not enabled
 #		Offline database support is not enabled
@@ -322,6 +322,7 @@ Param(
 #		Recommended RAM for each PVS Server using XA & XD vDisks
 #	Added to the Computer Hardware section, the server's Power Plan (requested by JLuhring)
 #	Changed all Verbose statements from Get-Date to Get-Date -Format G as requested by Guy Leech
+#	Changed getting the path for the PVS snapin from the environment variable for "ProgramFiles" to the console installation path (Thanks to Guy Leech)
 #	Changed the default Domain value to $env:UserDomain
 #	Changed the default User value to $env:username
 #		Combine the two values for the call to Get-Credential
@@ -329,7 +330,7 @@ Param(
 #	Check for the McliPSSnapIn snapin before installing the .Net snapins
 #		If the snapin already exists, there was no need to install and register the .Net V2 and V4 snapins for every script run
 #	Cleaned up alignment for most of the output
-#	Fixed the missing $DatacenterLicense variable (found by SHurjuk)
+#	Fixed the missing $DatacenterLicense variable (found by @salimhurjuk)
 #	Removed the Password parameter to keep from having the password entered as plaintext
 #		Use Get-Credential and code from Frank Lindenblatt to get the password from the $credential object
 #		The mcli-run SetupConnection uses only a plaintext password
@@ -373,10 +374,10 @@ Param(
 #	Update Functions GetInstalledRolesAndFeatures and OutputAppendixN to skip Server 2008 R2 as the Get-WindowsFeature cmdlet doesn't have the -ComputerName parameter
 #	Update Functions GetComputerWMIInfo and OutputNicInfo to fix two bugs in NIC Power Management settings
 #	Update Help Text
-
+#
 #Version 1.21 9-Sep-2019
 #	Fix incorrect LicenseSKU value for PVS version 7.19 and later
-
+#
 #Version 1.20 8-Jul-2019
 #	Added to Farm properties, Citrix Provisioning license type: On-Premises or Cloud (new to 1808)
 #	Added to vDisk properties, Accelerated Office Activation (new to 1906)
@@ -522,15 +523,21 @@ Function CheckOnPoSHPrereqs
 	If(!(Check-NeededPSSnapins "McliPSSnapIn"))
 	{
 		#We're missing Citrix Snapins that we need
-		$PFiles = [System.Environment]::GetEnvironmentVariable('ProgramFiles')
+		#$PFiles = [System.Environment]::GetEnvironmentVariable('ProgramFiles')
+		#changed in 1.23 to the console installation path
+		#this should return <DriveLetter:>\Program Files\Citrix\Provisioning Services Console\
+		$PFiles = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Citrix\ProvisioningServices' -Name ConsoleTargetDir -ErrorAction SilentlyContinue)|Select-Object -ExpandProperty ConsoleTargetDir
+		$PVSDLLPath = Join-Path -Path $PFiles -ChildPath "McliPSSnapIn.dll"
 		#Let's see if the DLLs can be registered
 		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Attempting to register the .Net V2 snapins"
-		If(Test-Path "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" -EA 0)
+		#If(Test-Path "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" -EA 0)
+		If(Test-Path $PVSDLLPath -EA 0)
 		{
 			$installutil = $env:systemroot + '\Microsoft.NET\Framework\v2.0.50727\installutil.exe'
 			If(Test-Path $installutil -EA 0)
 			{
-				&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
+				#&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
+				&$installutil $PVSDLLPath > $Null
 			
 				If(!$?)
 				{
@@ -545,7 +552,8 @@ Function CheckOnPoSHPrereqs
 			$installutil = $env:systemroot + '\Microsoft.NET\Framework64\v2.0.50727\installutil.exe'
 			If(Test-Path $installutil -EA 0)
 			{
-				&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
+				#&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
+				&$installutil $PVSDLLPath > $Null
 			
 				If(!$?)
 				{
@@ -559,16 +567,18 @@ Function CheckOnPoSHPrereqs
 		}
 		Else
 		{
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Unable to find "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll""
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Unable to find $PVSDLLPath"
 		}
 		
 		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Attempting to register the .Net V4 snapins"
-		If(Test-Path "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" -EA 0)
+		#If(Test-Path "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" -EA 0)
+		If(Test-Path $PVSDLLPath -EA 0)
 		{
 			$installutil = $env:systemroot + '\Microsoft.NET\Framework\v4.0.30319\installutil.exe'
 			If(Test-Path $installutil -EA 0)
 			{
-				&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
+				#&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
+				&$installutil $PVSDLLPath > $Null
 			
 				If(!$?)
 				{
@@ -583,7 +593,8 @@ Function CheckOnPoSHPrereqs
 			$installutil = $env:systemroot + '\Microsoft.NET\Framework64\v4.0.30319\installutil.exe'
 			If(Test-Path $installutil -EA 0)
 			{
-				&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
+				#&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
+				&$installutil $PVSDLLPath > $Null
 			
 				If(!$?)
 				{
@@ -597,7 +608,7 @@ Function CheckOnPoSHPrereqs
 		}
 		Else
 		{
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Unable to find "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll""
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Unable to find $PVSDLLPath"
 		}
 	
 		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Rechecking for McliPSSnapin"
@@ -617,7 +628,7 @@ Function CheckOnPoSHPrereqs
 		}
 		Else
 		{
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Citrix PowerShell Snap-ins detected."
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Citrix PowerShell Snap-ins detected at $PVSDLLPath"
 		}
 	}
 	Else
@@ -977,7 +988,7 @@ Function ProcessPVSFarm
 	$ErrorTxt = "Groups with Farm Administrator access"
 	$authgroups = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 
-	If($AuthGroups -ne $Null)
+	If($Null -ne $AuthGroups)
 	{
 		ForEach($Group in $authgroups)
 		{
@@ -997,7 +1008,7 @@ Function ProcessPVSFarm
 	$ErrorTxt = "Security Groups information"
 	$authgroups = BuildPVSObject $GetWhat $GetParam $ErrorTxt
 
-	If($AuthGroups -ne $Null)
+	If($Null -ne $AuthGroups)
 	{
 		ForEach($Group in $authgroups)
 		{
@@ -5210,7 +5221,16 @@ If($BadDir)
 {
 	Write-Host "$(Get-Date): 
 	
-	You are running the script from a standard Windows folder. 
+	You are running the script from a standard Windows folder.
+
+	Do not run the script from:
+
+	x:\PerfLogs
+	x:\Program Files
+	x:\Program Files (x86)
+	x:\ProgramData
+	x:\Windows or any subfolder
+
 	Script will exit.
 	"
 	Exit
