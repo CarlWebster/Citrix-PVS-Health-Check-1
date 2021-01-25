@@ -6,14 +6,14 @@
 	
 	Creates a text document named after the PVS farm.
 
-	The script should be run from an elevated PowerShell session.
+	The script must run from an elevated PowerShell session.
 	
 	NOTE: The account used to run this script must have at least Read access to the SQL 
 	Server that holds the Citrix Provisioning databases.
 
 .PARAMETER AdminAddress
-	Specifies the name of a PVS server that the PowerShell script will connect to. 
-	Using this parameter requires the script be run from an elevated PowerShell session.
+	Specifies the name of a PVS server that the PowerShell script connects to. 
+	Using this parameter requires the script to run from an elevated PowerShell session.
 	Starting with V1.11 of the script, this requirement is now checked.
 
 	This parameter has an alias of AA
@@ -26,7 +26,7 @@
 
 	Default value is contained in $env:username
 .PARAMETER CSV
-	Will create a CSV file for each Appendix.
+	Creates a CSV file for each Appendix.
 	The default value is False.
 	
 	Output CSV filename is in the format:
@@ -54,6 +54,7 @@
 		TNPVSFarm_HealthCheck_AppendixQ_ServerDriveItemsToReview.csv
 		TNPVSFarm_HealthCheck_AppendixQ_ServerProcessorItemsToReview.csv
 		TNPVSFarm_HealthCheck_AppendixQ_ServerNICItemsToReview.csv
+		TNPVSFarm_HealthCheck_AppendixR_CitrixInstalledComponents.csv
 .PARAMETER Dev
 	Clears errors at the beginning of the script.
 	Outputs all errors to a text file at the end of the script.
@@ -89,13 +90,12 @@
 .EXAMPLE
 	PS C:\PSScript > .\PVS_HealthCheck.ps1
 	
-	Will use all Default values.
+	Uses all Default values.
 	LocalHost for AdminAddress.
 .EXAMPLE
 	PS C:\PSScript > .\PVS_HealthCheck.ps1 -AdminAddress PVS1 -User cwebster -Domain WebstersLab
 
-	This example is usually used to run the script against a PVS Farm in 
-	another domain or forest.
+	Use this example to run the script against a PVS Farm in another domain or forest.
 	
 	Will use:
 		PVS1 for AdminAddress.
@@ -120,10 +120,11 @@
 	PS C:\PSScript > .\PVS_HealthCheck.ps1 -SmtpServer mail.domain.tld -From 
 	XDAdmin@domain.tld -To ITGroup@domain.tld -ComputerName DHCPServer01
 	
-	Script will use the email server mail.domain.tld, sending from XDAdmin@domain.tld, 
+	Script uses the email server mail.domain.tld, sending from XDAdmin@domain.tld and 
 	sending to ITGroup@domain.tld.
-	If the current user's credentials are not valid to send email, the user will be prompted 
-	to enter valid credentials.
+	
+	If the current user's credentials are not valid to send an email, the script prompts 
+	the user to enter valid credentials.
 .EXAMPLE
 	PS C:\PSScript > .\PVS_HealthCheck.ps1 -Dev -ScriptInfo -Log
 	
@@ -138,54 +139,47 @@
 .EXAMPLE
 	PS C:\PSScript > .\PVS_HealthCheck.ps1 -CSV
 	
-	Will use all Default values.
+	Uses all Default values.
 	LocalHost for AdminAddress.
 	Creates a CSV file for each Appendix.
 .EXAMPLE
-	PS C:\PSScript > .\PVS_HealthCheck.ps1 
-	-SmtpServer mail.domain.tld
-	-From XDAdmin@domain.tld 
-	-To ITGroup@domain.tld	
+	PS C:\PSScript > .\PVS_HealthCheck.ps1 -SmtpServer mail.domain.tld -From 
+	XDAdmin@domain.tld -To ITGroup@domain.tld	
 
-	The script will use the email server mail.domain.tld, sending from XDAdmin@domain.tld, 
-	sending to ITGroup@domain.tld.
+	The script uses the email server mail.domain.tld, sending from XDAdmin@domain.tld 
+	and sending to ITGroup@domain.tld.
 
-	The script will use the default SMTP port 25 and will not use SSL.
+	The script uses the default SMTP port 25 and does not use SSL.
 
-	If the current user's credentials are not valid to send email, 
-	the user will be prompted to enter valid credentials.
+    If the current user's credentials are not valid to send an email, the script prompts 
+    the user to enter valid credentials.
 .EXAMPLE
-	PS C:\PSScript > .\PVS_HealthCheck.ps1 
-	-SmtpServer mailrelay.domain.tld
-	-From Anonymous@domain.tld 
-	-To ITGroup@domain.tld	
+	PS C:\PSScript > .\PVS_HealthCheck.ps1 -SmtpServer mailrelay.domain.tld	-From 
+	Anonymous@domain.tld -To ITGroup@domain.tld	
 
 	***SENDING UNAUTHENTICATED EMAIL***
 
-	The script will use the email server mailrelay.domain.tld, sending from 
-	anonymous@domain.tld, sending to ITGroup@domain.tld.
+	The script uses the email server mailrelay.domain.tld, sending from anonymous@domain.tld and sending to ITGroup@domain.tld.
 
-	To send unauthenticated email using an email relay server requires the From email account 
-	to use the name Anonymous.
+	To send an unauthenticated email using an email relay server requires the From email 
+	account to use the name Anonymous.
 
-	The script will use the default SMTP port 25 and will not use SSL.
+	The script uses the default SMTP port 25 and does not use SSL.
 	
 	***GMAIL/G SUITE SMTP RELAY***
 	https://support.google.com/a/answer/2956491?hl=en
 	https://support.google.com/a/answer/176600?hl=en
 
-	To send email using a Gmail or g-suite account, you may have to turn ON
-	the "Less secure app access" option on your account.
+	To send an email using a Gmail or g-suite account, you may have to turn ON the "Less 
+	secure app access" option on your account.
 	***GMAIL/G SUITE SMTP RELAY***
 
-	The script will generate an anonymous secure password for the anonymous@domain.tld 
+	The script generates an anonymous, secure password for the anonymous@domain.tld 
 	account.
 .EXAMPLE
-	PS C:\PSScript > .\PVS_HealthCheck.ps1 
-	-SmtpServer labaddomain-com.mail.protection.outlook.com
-	-UseSSL
-	-From SomeEmailAddress@labaddomain.com 
-	-To ITGroupDL@labaddomain.com	
+	PS C:\PSScript > .\PVS_HealthCheck.ps1 -SmtpServer 
+	labaddomain-com.mail.protection.outlook.com -UseSSL -From 
+	SomeEmailAddress@labaddomain.com -To ITGroupDL@labaddomain.com	
 
 	***OFFICE 365 Example***
 
@@ -195,50 +189,43 @@
 	
 	***OFFICE 365 Example***
 
-	The script will use the email server labaddomain-com.mail.protection.outlook.com, 
-	sending from SomeEmailAddress@labaddomain.com, sending to ITGroupDL@labaddomain.com.
+	The script uses the email server labaddomain-com.mail.protection.outlook.com, sending f
+	rom SomeEmailAddress@labaddomain.com and sending to ITGroupDL@labaddomain.com.
 
-	The script will use the default SMTP port 25 and will use SSL.
+	The script uses the default SMTP port 25 and SSL.
 .EXAMPLE
-	PS C:\PSScript > .\PVS_HealthCheck.ps1 
-	-SmtpServer smtp.office365.com 
-	-SmtpPort 587
-	-UseSSL 
-	-From Webster@CarlWebster.com 
-	-To ITGroup@CarlWebster.com	
+	PS C:\PSScript > .\PVS_HealthCheck.ps1 -SmtpServer smtp.office365.com -SmtpPort 587
+	-UseSSL -From Webster@CarlWebster.com -To ITGroup@CarlWebster.com	
 
-	The script will use the email server smtp.office365.com on port 587 using SSL, 
-	sending from webster@carlwebster.com, sending to ITGroup@carlwebster.com.
+	The script uses the email server smtp.office365.com on port 587 using SSL, sending from 
+	webster@carlwebster.com and sending to ITGroup@carlwebster.com.
 
-	If the current user's credentials are not valid to send email, 
-	the user will be prompted to enter valid credentials.
+    If the current user's credentials are not valid to send an email, the script prompts 
+    the user to enter valid credentials.
 .EXAMPLE
-	PS C:\PSScript > .\PVS_HealthCheck.ps1 
-	-SmtpServer smtp.gmail.com 
-	-SmtpPort 587
-	-UseSSL 
-	-From Webster@CarlWebster.com 
-	-To ITGroup@CarlWebster.com	
+	PS C:\PSScript > .\PVS_HealthCheck.ps1 -SmtpServer smtp.gmail.com -SmtpPort 587 -UseSSL 
+	-From Webster@CarlWebster.com -To ITGroup@CarlWebster.com	
 
 	*** NOTE ***
-	To send email using a Gmail or g-suite account, you may have to turn ON
-	the "Less secure app access" option on your account.
+	To send an email using a Gmail or g-suite account, you may have to turn ON the "Less 
+	secure app access" option on your account.
 	*** NOTE ***
 	
-	The script will use the email server smtp.gmail.com on port 587 using SSL, 
-	sending from webster@gmail.com, sending to ITGroup@carlwebster.com.
+	The script uses the email server smtp.gmail.com on port 587 using SSL, sending from 
+	webster@gmail.com and sending to ITGroup@carlwebster.com.
 
-	If the current user's credentials are not valid to send email, 
-	the user will be prompted to enter valid credentials.
+    If the current user's credentials are not valid to send an email, the script prompts 
+    the user to enter valid credentials.
 .INPUTS
 	None.  You cannot pipe objects to this script.
 .OUTPUTS
-	No objects are output from this script.  This script creates a text file.
+	No objects are output from this script.  This script creates a text file and optional 
+	CSV files.
 .NOTES
 	NAME: PVS_HealthCheck.ps1
-	VERSION: 1.23
-	AUTHOR: Carl Webster (with a lot of help from BG a, now former, Citrix dev)
-	LASTEDIT: January 8, 2021
+	VERSION: 1.24
+	AUTHOR: Carl Webster (with much help from BG a, now former, Citrix dev)
+	LASTEDIT: January 25, 2021
 #>
 
 
@@ -298,6 +285,20 @@ Param(
 #released to the community on February 2, 2016
 #
 
+#Version 1.24 25-Jan-2021
+#	Added Appendix R for Installed Citrix Components
+#		Added array $Script:CtxInstalledComponents
+#		Added Function GetCitrixInstalledComponents
+#		Added Function OutputAppendixR
+#		Added CSV file PVSFarmName_HealthCheck_AppendixR_CitrixInstalledComponents.csv
+#	Added error checking in Function Check-NeededPSSnapins (Requested by Guy Leech)
+#	Added more Write-Host statements in Function CheckOnPoSHPrereqs
+#	Changed console message "Processing PVS Processes for Server" to "Retrieving PVS Processes for Server"
+#	Cleaned up the console output
+#	Fixed several misplaced Write-Host statements
+#	Updated the help text
+#	Updated the ReadMe file
+#
 #Version 1.23 8-Jan-2021
 #	Added Appendix P - Items to Review
 #		Auditing is not enabled
@@ -523,46 +524,53 @@ Function CheckOnPoSHPrereqs
 	If(!(Check-NeededPSSnapins "McliPSSnapIn"))
 	{
 		#We're missing Citrix Snapins that we need
-		#$PFiles = [System.Environment]::GetEnvironmentVariable('ProgramFiles')
 		#changed in 1.23 to the console installation path
 		#this should return <DriveLetter:>\Program Files\Citrix\Provisioning Services Console\
 		$PFiles = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Citrix\ProvisioningServices' -Name ConsoleTargetDir -ErrorAction SilentlyContinue)|Select-Object -ExpandProperty ConsoleTargetDir
 		$PVSDLLPath = Join-Path -Path $PFiles -ChildPath "McliPSSnapIn.dll"
 		#Let's see if the DLLs can be registered
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Attempting to register the .Net V2 snapins"
-		#If(Test-Path "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" -EA 0)
 		If(Test-Path $PVSDLLPath -EA 0)
 		{
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Searching for the 32-bit .Net V2 snapin"
 			$installutil = $env:systemroot + '\Microsoft.NET\Framework\v2.0.50727\installutil.exe'
 			If(Test-Path $installutil -EA 0)
 			{
-				#&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tAttempting to register the 32-bit .Net V2 snapin"
 				&$installutil $PVSDLLPath > $Null
 			
 				If(!$?)
 				{
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Unable to register the 32-bit V2 PowerShell Snap-in."
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tUnable to register the 32-bit V2 PowerShell Snap-in."
 				}
 				Else
 				{
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Registered the 32-bit V2 PowerShell Snap-in."
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tRegistered the 32-bit V2 PowerShell Snap-in."
 				}
 			}
+			Else
+			{
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tNo 32-bit .Net V2 snapin found"
+			}
 	
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Searching for the 64-bit .Net V2 snapin"
 			$installutil = $env:systemroot + '\Microsoft.NET\Framework64\v2.0.50727\installutil.exe'
 			If(Test-Path $installutil -EA 0)
 			{
-				#&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tAttempting to register the 64-bit .Net V2 snapin"
 				&$installutil $PVSDLLPath > $Null
 			
 				If(!$?)
 				{
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Unable to register the 64-bit V2 PowerShell Snap-in."
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tUnable to register the 64-bit V2 PowerShell Snap-in."
 				}
 				Else
 				{
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Registered the 64-bit V2 PowerShell Snap-in."
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tRegistered the 64-bit V2 PowerShell Snap-in."
 				}
+			}
+			Else
+			{
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tNo 64-bit .Net V2 snapin found"
 			}
 		}
 		Else
@@ -570,40 +578,48 @@ Function CheckOnPoSHPrereqs
 			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Unable to find $PVSDLLPath"
 		}
 		
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Attempting to register the .Net V4 snapins"
-		#If(Test-Path "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" -EA 0)
 		If(Test-Path $PVSDLLPath -EA 0)
 		{
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Searching for the 32-bit .Net V4 snapin"
 			$installutil = $env:systemroot + '\Microsoft.NET\Framework\v4.0.30319\installutil.exe'
 			If(Test-Path $installutil -EA 0)
 			{
-				#&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tAttempting to register the 32-bit .Net V4 snapin"
 				&$installutil $PVSDLLPath > $Null
 			
 				If(!$?)
 				{
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Unable to register the 32-bit V4 PowerShell Snap-in."
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tUnable to register the 32-bit V4 PowerShell Snap-in."
 				}
 				Else
 				{
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Registered the 32-bit V4 PowerShell Snap-in."
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tRegistered the 32-bit V4 PowerShell Snap-in."
 				}
 			}
+			Else
+			{
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tNo 32-bit .Net V4 snapin found"
+			}
 	
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Searching for the 64-bit .Net V4 snapin"
 			$installutil = $env:systemroot + '\Microsoft.NET\Framework64\v4.0.30319\installutil.exe'
 			If(Test-Path $installutil -EA 0)
 			{
-				#&$installutil "$PFiles\Citrix\Provisioning Services Console\McliPSSnapIn.dll" > $Null
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tAttempting to register the 64-bit .Net V4 snapin"
 				&$installutil $PVSDLLPath > $Null
 			
 				If(!$?)
 				{
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Unable to register the 64-bit V4 PowerShell Snap-in."
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tUnable to register the 64-bit V4 PowerShell Snap-in."
 				}
 				Else
 				{
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Registered the 64-bit V4 PowerShell Snap-in."
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tRegistered the 64-bit V4 PowerShell Snap-in."
 				}
+			}
+			Else
+			{
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tNo 64-bit .Net V4 snapin found"
 			}
 		}
 		Else
@@ -979,7 +995,7 @@ Function ProcessPVSFarm
 	Line 0 "Version`t`t`t`t: " $Script:PVSFullVersion
 	
 	#security tab
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Security Tab"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tProcessing Security Tab"
 	Line 0 "Security"
 	Line 1 "Groups with Farm Administrator access:"
 	#build security tab values
@@ -1000,7 +1016,7 @@ Function ProcessPVSFarm
 	}
 
 	#groups tab
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Groups Tab"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tProcessing Groups Tab"
 	Line 0 "Groups"
 	Line 1 "All the Security Groups that can be assigned access rights:"
 	$GetWhat = "authgroup"
@@ -1019,7 +1035,7 @@ Function ProcessPVSFarm
 		}
 	}
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Licensing Tab"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tProcessing Licensing Tab"
 	Line 0 "License server name`t`t: " $Script:farm.licenseServer
 	Line 0 "License server IP`t`t: " $LicenseServerIPAddress
 	Line 0 "License server port`t`t: " $Script:farm.licenseServerPort
@@ -1093,7 +1109,7 @@ Function ProcessPVSFarm
 	}	
 	
 	#options tab
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Options Tab"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tProcessing Options Tab"
 	Line 0 "Enable auditing`t`t`t: " -nonewline
 	If($Script:farm.auditingEnabled -eq "1")
 	{
@@ -1145,7 +1161,7 @@ Function ProcessPVSFarm
 	If($Script:PVSVersion -eq "6" -or $Script:PVSVersion -eq "7")
 	{
 		#vDisk Version tab
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing vDisk Version Tab"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tProcessing vDisk Version Tab"
 		Line 0 "vDisk Version"
 		Line 1 "Alert if number of versions from base image exceeds`t: " $Script:farm.maxVersions
 		Line 1 "Default access mode for new merge versions`t`t: " -nonewline
@@ -1159,7 +1175,7 @@ Function ProcessPVSFarm
 	}
 	
 	#status tab
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Status Tab"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tProcessing Status Tab"
 	Line 0 "Database server`t`t`t: " $Script:farm.databaseServerName
 	Line 0 "Database server IP`t`t: " $SQLServerIPAddress
 	Line 0 "Database instance`t`t: " $Script:farm.databaseInstanceName
@@ -1199,11 +1215,11 @@ Function ProcessPVSSite
 	{
 		ForEach($PVSSite in $PVSSites)
 		{
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Site $($PVSSite.siteName)"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tProcessing Site $($PVSSite.siteName)"
 			Line 0 "Site Name: " $PVSSite.siteName
 
 			#security tab
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Security Tab"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tProcessing Security Tab"
 			$temp = $PVSSite.SiteName
 			$GetWhat = "authgroup"
 			$GetParam = "sitename = $temp"
@@ -1226,7 +1242,7 @@ Function ProcessPVSSite
 			#MAK User and Password are encrypted
 
 			#options tab
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Options Tab"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tProcessing Options Tab"
 			If($PVSVersion -eq "5" -or (($PVSVersion -eq "6" -or $PVSVersion -eq "7") -and $FarmAutoAddEnabled))
 			{
 				Line 1 "Add new devices to this collection`t`t: " -nonewline
@@ -1247,7 +1263,7 @@ Function ProcessPVSSite
 				}
 
 				#vDisk Update
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing vDisk Update Tab"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tProcessing vDisk Update Tab"
 				If($PVSSite.enableDiskUpdate -eq "1")
 				{
 					Line 1 "Enable automatic vDisk updates on this site`t: Yes"
@@ -1261,7 +1277,7 @@ Function ProcessPVSSite
 			Line 0 ""
 			
 			#process all servers in site
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Servers in Site $($PVSSite.siteName)"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tProcessing Servers in Site $($PVSSite.siteName)"
 			$temp = $PVSSite.SiteName
 			$GetWhat = "server"
 			$GetParam = "sitename = $temp"
@@ -1270,7 +1286,7 @@ Function ProcessPVSSite
 			
 			If($Null -eq $servers)
 			{
-				Write-Host -foregroundcolor Red -backgroundcolor Black "WARNING: $(Get-Date -Format G): No Servers Found in Site $($PVSSite.siteName)"
+				Write-Host -foregroundcolor Red -backgroundcolor Black "WARNING: $(Get-Date -Format G): `t`tNo Servers Found in Site $($PVSSite.siteName)"
 				Line 0 "No Servers Found in Site $($PVSSite.siteName)"
 			}
 			Else
@@ -1281,9 +1297,9 @@ Function ProcessPVSSite
 					#first make sure the SOAP service is running on the server
 					If(VerifyPVSSOAPService $Server.serverName)
 					{
-						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Server $($Server.serverName)"
+						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tProcessing Server $($Server.serverName)"
 						#general tab
-						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing General Tab"
+						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tProcessing General Tab"
 						Line 2 "Name`t`t`t`t`t`t: " $Server.serverName
 						Line 2 "Log events to the server's Windows Event Log`t: " -nonewline
 						If($Server.eventLoggingEnabled -eq "1")
@@ -1299,7 +1315,7 @@ Function ProcessPVSSite
 							$null = $Script:ItemsToReview.Add($obj1)
 						}
 							
-						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Network Tab"
+						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tProcessing Network Tab"
 						$test = $Server.ip.ToString()
 						$test1 = $test.replace(",",", ")
 						
@@ -1335,7 +1351,7 @@ Function ProcessPVSSite
 							
 						#create array for appendix A
 						
-						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Gather Advanced server info for Appendix A and B"
+						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`t`tGather Advanced server info"
 						$obj1 = [PSCustomObject] @{
 							ServerName              = $Server.serverName						
 							ThreadsPerPort          = $Server.threadsPerPort						
@@ -1378,6 +1394,8 @@ Function ProcessPVSSite
 						GetInstalledRolesAndFeatures $server.ServerName
 						
 						GetPVSProcessInfo $server.ServerName
+						
+						GetCitrixInstalledComponents $server.ServerName
 					}
 					Else
 					{
@@ -1389,7 +1407,7 @@ Function ProcessPVSSite
 			}
 
 			#process all device collections in site
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing all device collections in site"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tProcessing all device collections in site"
 			$Temp = $PVSSite.SiteName
 			$GetWhat = "Collection"
 			$GetParam = "siteName = $Temp"
@@ -1401,11 +1419,11 @@ Function ProcessPVSSite
 				Line 1 "Device Collections"
 				ForEach($Collection in $Collections)
 				{
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Collection $($Collection.collectionName)"
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing General Tab"
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tProcessing Collection $($Collection.collectionName)"
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tProcessing General Tab"
 					Line 2 "Name: " $Collection.collectionName
 
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Security Tab"
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tProcessing Security Tab"
 					$Temp = $Collection.collectionId
 					$GetWhat = "authGroup"
 					$GetParam = "collectionId = $Temp"
@@ -1470,7 +1488,7 @@ Function ProcessPVSSite
 						Line 3 "Groups with 'Device Operator' access`t`t: None defined"
 					}
 
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Auto-Add Tab"
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tProcessing Auto-Add Tab"
 					If($Script:FarmAutoAddEnabled)
 					{
 						Line 3 "Template target device`t`t`t`t: " $Collection.templateDeviceName
@@ -1503,7 +1521,7 @@ Function ProcessPVSSite
 						Line 3 "The auto-add feature is not enabled at the PVS Farm level"
 					}
 					#for each collection process each device
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing the first device in each collection"
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tProcessing the first device in each collection"
 					$Temp = $Collection.collectionId
 					$GetWhat = "deviceInfo"
 					$GetParam = "collectionId = $Temp"
@@ -1514,7 +1532,7 @@ Function ProcessPVSSite
 					{
 						Line 0 ""
 						$Device = $Devices[0]
-						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Device $($Device.deviceName)"
+						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`t`tProcessing Device $($Device.deviceName)"
 						If($Device.type -eq "3")
 						{
 							Line 3 "Device with Personal vDisk Properties"
@@ -1523,7 +1541,7 @@ Function ProcessPVSSite
 						{
 							Line 3 "Target Device Properties"
 						}
-						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing General Tab"
+						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`t`t`tProcessing General Tab"
 						Line 4 "Name`t`t`t`t`t: " $Device.deviceName
 						If(($PVSVersion -eq "6" -or $PVSVersion -eq "7") -and $Device.type -ne "3")
 						{
@@ -1566,7 +1584,7 @@ Function ProcessPVSSite
 							Line 4 "vDisk`t`t`t`t`t: " $Device.diskLocatorName
 							Line 4 "Personal vDisk Drive`t`t`t: " $Device.pvdDriveLetter
 						}
-						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing vDisks Tab"
+						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`t`t`tProcessing vDisks Tab"
 						#process all vdisks for this device
 						$Temp = $Device.deviceName
 						$GetWhat = "DiskInfo"
@@ -1606,18 +1624,18 @@ Function ProcessPVSSite
 		}
 	}
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
+	#Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
 
 Function VerifyPVSSOAPService
 {
 	Param([string]$PVSServer='')
 	
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Verifying server $($PVSServer) is online"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tVerifying server $($PVSServer) is online"
 	If(Test-Connection -ComputerName $PVSServer -quiet -EA 0)
 	{
 
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Verifying PVS SOAP Service is running on server $($PVSServer)"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tVerifying PVS SOAP Service is running on server $($PVSServer)"
 		$soapserver = $Null
 
 		$soapserver = Get-Service -ComputerName $PVSServer -EA 0 | Where-Object {$_.Name -like "soapserver"}
@@ -1653,7 +1671,7 @@ Function GetInstalledRolesAndFeatures
 	Else
 	{
 		#added V1.16 get Windows installed Roles and Features
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tRetrieving Windows installed Roles and Features"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tRetrieving Windows installed Roles and Features"
 		[bool]$GotWinComponents = $True
 		
 		$results = Get-WindowsFeature -ComputerName $ComputerName -EA 0 4> $Null
@@ -1665,7 +1683,6 @@ Function GetInstalledRolesAndFeatures
 		
 		$WinComponents = $results | Where-Object Installed | Select-Object DisplayName,Name,FeatureType | Sort-Object DisplayName 
 		
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tOutput Windows installed Roles and Features"
 		If($GotWinComponents -eq $False)
 		{
 			Line 1 "No Windows installed Roles and Features were found"
@@ -1756,9 +1773,9 @@ Function GetBootstrapInfo
 {
 	Param([object]$server)
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Bootstrap files"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tProcessing Bootstrap files"
 	Line 2 "Bootstrap settings"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Bootstrap files for Server $($server.servername)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`t`tProcessing Bootstrap files for Server $($server.servername)"
 	#first get all bootstrap files for the server
 	$temp = $server.serverName
 	$GetWhat = "ServerBootstrapNames"
@@ -1816,11 +1833,9 @@ Function GetBootstrapInfo
 		}
 		If($Null -ne $ServerBootstraps)
 		{
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Bootstrap file $($ServerBootstrap.Bootstrapname)"
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing General Tab"
 			ForEach($ServerBootstrap in $ServerBootstraps)
 			{
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Gather Bootstrap info for Appendix D"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`t`tProcessing Bootstrap file $($ServerBootstrap.Bootstrapname)"
 				$obj1 = [PSCustomObject] @{
 					ServerName 	  = $Server.serverName				
 					BootstrapName = $ServerBootstrap.Bootstrapname				
@@ -1831,6 +1846,7 @@ Function GetBootstrapInfo
 				}
 				$null = $Script:BootstrapItems.Add($obj1)
 
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`t`t`tProcessing Bootstrap General Tab"
 				Line 3 "Bootstrap file`t: " $ServerBootstrap.Bootstrapname
 				If($ServerBootstrap.bootserver1_Ip -ne "0.0.0.0")
 				{
@@ -1861,7 +1877,7 @@ Function GetBootstrapInfo
 					Line 3 "Port`t`t: " $ServerBootstrap.bootserver4_Port
 				}
 				Line 0 ""
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Options Tab"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`t`t`tProcessing Bootstrap Options Tab"
 				Line 3 "Verbose mode`t`t: " -nonewline
 				If($ServerBootstrap.verboseMode -eq "1")
 				{
@@ -1931,7 +1947,7 @@ Function GetPVSServiceInfo
 {
 	Param([string]$ComputerName)
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing PVS Services for Server $($server.servername)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tProcessing PVS Services for Server $($server.servername)"
 	$Services = Get-WmiObject -ComputerName $ComputerName Win32_Service -EA 0 | `
 	Where-Object {$_.DisplayName -like "Citrix PVS*"} | `
 	Select-Object displayname, name, status, startmode, started, startname, state | `
@@ -1995,7 +2011,7 @@ Function GetPVSProcessInfo
 	
 	#All four of those run within the StreamService.exe process.
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing PVS Processes for Server $($server.servername)"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tRetrieving PVS Processes for Server $($server.servername)"
 
 	Try
 	{
@@ -2172,7 +2188,7 @@ Function GetMicrosoftHotfixes
 	Param([string]$ComputerName)
 	
 	#added V1.16 get installed Microsoft Hotfixes and Updates
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tRetrieving Microsoft hotfixes and updates"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tRetrieving Microsoft hotfixes and updates"
 	[bool]$GotMSHotfixes = $True
 	
 	Try
@@ -2187,7 +2203,6 @@ Function GetMicrosoftHotfixes
 		$GotMSHotfixes = $False
 	}
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tOutput Microsoft hotfixes and updates"
 	If($GotMSHotfixes -eq $False)
 	{
 		Line 1 "No installed Microsoft hotfixes or updates were found"
@@ -2210,6 +2225,94 @@ Function GetMicrosoftHotfixes
 	}
 }
 
+Function GetCitrixInstalledComponents 
+{
+	Param([string]$ComputerName)
+	
+	#added V1.24 get installed Citrix components
+	#code adapted from the CVAD doc script
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tRetrieving Citrix installed components"
+	[bool]$GotCtxComponents = $True
+	
+	If($ComputerName -eq $env:computername)
+	{
+		$results = Get-ChildItem HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall|`
+		ForEach-Object{Get-ItemProperty $_.pspath}|`
+		Where-Object { $_.PSObject.Properties[ 'Publisher' ] -and $_.Publisher -like 'Citrix*'}|`
+		Select-Object DisplayName, DisplayVersion
+	}
+	Else
+	{
+		#see if the remote registy service is running
+		$serviceresults = Get-Service -ComputerName $ComputerName -Name "RemoteRegistry" -EA 0
+		If($? -and $Null -ne $serviceresults)
+		{
+			If($serviceresults.Status -eq "Running")
+			{
+				$results = Invoke-Command -ComputerName $ComputerName -ScriptBlock `
+				{Get-ChildItem HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall|`
+				ForEach-Object{Get-ItemProperty $_.pspath}|`
+				Where-Object { $_.PSObject.Properties[ 'Publisher' ] -and $_.Publisher -like 'Citrix*'}|`
+				Select-Object DisplayName, DisplayVersion}
+			}
+		}
+		Else
+		{
+			$results = $Null
+			$GotCtxComponents = $False
+		}
+	}
+	
+	If(!$? -or $Null -eq $results)
+	{
+		$GotCtxComponents = $False
+	}
+	Else
+	{
+		$CtxComponents = $results
+		$results = $Null
+		
+		If($ComputerName -eq $env:computername)
+		{
+			$results = Get-ChildItem HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall|`
+			ForEach-Object{Get-ItemProperty $_.pspath}|`
+			Where-Object { $_.PSObject.Properties[ 'Publisher' ] -and $_.Publisher -like 'Citrix*'}|`
+			Select-Object DisplayName, DisplayVersion
+		}
+		Else
+		{
+			$results = Invoke-Command -ComputerName $ComputerName -ScriptBlock `
+			{Get-ChildItem HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall|`
+			ForEach-Object{Get-ItemProperty $_.pspath}|`
+			Where-Object { $_.PSObject.Properties[ 'Publisher' ] -and $_.Publisher -like 'Citrix*'}|`
+			Select-Object DisplayName, DisplayVersion}
+		}
+		If($?)
+		{
+			$CtxComponents += $results
+		}
+		
+		$CtxComponents = $CtxComponents | Sort-Object DisplayName
+	}
+	
+	If($GotCtxComponents)
+	{
+		ForEach($Component in $CtxComponents)
+		{
+			$obj1 = [PSCustomObject] @{
+				DisplayName    = $Component.DisplayName						
+				DisplayVersion = $Component.DisplayVersion						
+				PVSServerName  = $ComputerName						
+			}
+			$null = $Script:CtxInstalledComponents.Add($obj1)
+		}
+	}
+	Else
+	{
+		Line 1 "No Citrix Installed Components were found"
+	}
+}
+
 Function GetComputerWMIInfo
 {
 	Param([string]$RemoteComputerName)
@@ -2224,8 +2327,8 @@ Function GetComputerWMIInfo
 	# modified 2-Apr-2018 to add ComputerOS information
 
 	#Get Computer info
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tProcessing WMI Computer information"
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tHardware information"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tProcessing WMI Computer information"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`t`tHardware information"
 	Line 0 ""
 	Line 2 "Computer Information: $($RemoteComputerName)"
 	Line 3 "General Computer"
@@ -2270,7 +2373,7 @@ Function GetComputerWMIInfo
 	}
 	
 	#Get Disk info
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tDrive information"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`t`tDrive information"
 
 	Line 3 "Drive(s)"
 
@@ -2315,7 +2418,7 @@ Function GetComputerWMIInfo
 	
 
 	#Get CPU's and stepping
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tProcessor information"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`t`tProcessor information"
 
 	Line 3 "Processor(s)"
 
@@ -2355,7 +2458,7 @@ Function GetComputerWMIInfo
 	}
 
 	#Get Nics
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tNIC information"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`t`tNIC information"
 
 	Line 3 "Network Interface(s)"
 
@@ -2837,7 +2940,7 @@ Function OutputNicItem
 Function ProcessvDisksinFarm
 {
 	#process all vDisks in site
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing all vDisks in site"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tProcessing all vDisks in site"
 	[int]$NumberofvDisks = 0
 	$GetWhat = "DiskInfo"
 	$GetParam = ""
@@ -2849,12 +2952,12 @@ Function ProcessvDisksinFarm
 	{
 		ForEach($Disk in $Disks)
 		{
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing vDisk $($Disk.diskLocatorName)"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tProcessing vDisk $($Disk.diskLocatorName)"
 			Line 1 $Disk.diskLocatorName
 			If($Script:PVSVersion -eq "5")
 			{
 				#PVS 5.x
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing General Tab"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tProcessing General Tab"
 				Line 2 "Store: " $Disk.storeName
 				Line 2 "Site: " $Disk.siteName
 				Line 2 "Filename: " $Disk.diskLocatorName
@@ -2972,7 +3075,7 @@ Function ProcessvDisksinFarm
 					Default {Line 0 "Volume License Mode could not be determined: $($Disk.licenseMode)"; Break}
 				}
 				#options tab
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Options Tab"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tProcessing Options Tab"
 				Line 2 "High availability (HA): " -nonewline
 				If($Disk.haEnabled -eq "1")
 				{
@@ -3005,8 +3108,8 @@ Function ProcessvDisksinFarm
 			Else
 			{
 				#PVS 6.x or 7.x
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing vDisk Properties"
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing General Tab"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tProcessing vDisk Properties"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tProcessing General Tab"
 				Line 2 "Site`t`t`t`t`t`t: " $Disk.siteName
 				Line 2 "Store`t`t`t`t`t`t: " $Disk.storeName
 				Line 2 "Filename`t`t`t`t`t: " $Disk.diskLocatorName
@@ -3108,7 +3211,7 @@ Function ProcessvDisksinFarm
 					}
 				}
 
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Auto Update Tab"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tProcessing Auto Update Tab"
 				If($Disk.activationDateEnabled -eq "0")
 				{
 					Line 2 "Enable automatic updates for the vDisk`t`t: " -nonewline
@@ -3138,7 +3241,7 @@ Function ProcessvDisksinFarm
 				#process Versions menu
 				#get versions info
 				#thanks to the PVS Product team for their help in understanding the Versions information
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing vDisk Versions"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tProcessing vDisk Versions"
 				$error.Clear()
 				$MCLIGetResult = Mcli-Get DiskVersion -p diskLocatorName="$($Disk.diskLocatorName)",storeName="$($disk.storeName)",siteName="$($disk.siteName)"
 				If($error.Count -eq 0)
@@ -3208,7 +3311,7 @@ Function ProcessvDisksinFarm
 						$VersionFlag = $False
 						ForEach($DiskVersion in $DiskVersions)
 						{
-							Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing vDisk Version $($DiskVersion.version)"
+							Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tProcessing vDisk Version $($DiskVersion.version)"
 							Line 2 "Version`t`t`t`t`t`t: " -NoNewLine
 							If($DiskVersion.version -eq $BootingVersion)
 							{
@@ -3334,7 +3437,7 @@ Function ProcessvDisksinFarm
 				}
 				
 				#process vDisk Load Balancing Menu
-				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing vDisk Load Balancing Menu"
+				Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tProcessing vDisk Load Balancing Menu"
 				If(![String]::IsNullOrEmpty($Disk.serverName))
 				{
 					Line 2 "Use this server to provide the vDisk: " $Disk.serverName
@@ -3391,7 +3494,7 @@ Function ProcessvDisksinFarm
 Function ProcessStores
 {
 	#process the stores now
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Stores"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tProcessing Stores"
 	Line 0 "Stores Properties"
 	$GetWhat = "Store"
 	$GetParam = ""
@@ -3401,11 +3504,11 @@ Function ProcessStores
 	{
 		ForEach($Store in $Stores)
 		{
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Store $($Store.StoreName)"
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing General Tab"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tProcessing Store $($Store.StoreName)"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tProcessing General Tab"
 			Line 1 "Name: " $Store.StoreName
 			
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Servers Tab"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tProcessing Servers Tab"
 			Line 1 "Servers"
 			#find the servers (and the site) that serve this store
 			$GetWhat = "Server"
@@ -3417,7 +3520,7 @@ Function ProcessStores
 			{
 				ForEach($Server in $Servers)
 				{
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Server $($Server.serverName)"
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tProcessing Server $($Server.serverName)"
 					$Temp = $Server.serverName
 					$GetWhat = "ServerStore"
 					$GetParam = "serverName = $Temp"
@@ -3439,7 +3542,7 @@ Function ProcessStores
 				Line 3 $StoreServer
 			}
 
-			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Processing Paths Tab"
+			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`tProcessing Paths Tab"
 			Line 1 "Paths"
 
 			#Run through the servers again and test each one for the path
@@ -4387,6 +4490,68 @@ Function OutputAppendixQ
 }
 #endregion
 
+#region Appendixr
+Function OutputAppendixR
+{
+	#added in V1.24
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Create Appendix R Citrix Installed Components"
+
+	$Script:CtxInstalledComponents = $Script:CtxInstalledComponents | Sort-Object DisplayName, PVSServerName
+	
+	If($CSV)
+	{
+		$File = "$($Script:pwdpath)\$($Script:farm.FarmName)_HealthCheck_AppendixR_CitrixInstalledComponents.csv"
+		$Script:CtxInstalledComponents | Export-CSV -Force -Encoding ASCII -NoTypeInformation -Path $File *> $Null
+	}
+	
+	Line 0 "Appendix R - Citrix Installed Components"
+	Line 0 "This Appendix is for Server comparison only"
+	Line 0 ""
+	$maxLength = ($Script:CtxInstalledComponents.DisplayName | Measure-Object -Property length -Maximum).Maximum
+	$NegativeMaxLength = $maxLength * -1
+	Line 1 "Display Name" -nonewline
+	Line 0 (" " * ($maxLength - 11)) -nonewline
+	Line 0 "Display Version           " -nonewline
+	Line 0 "PVS Server Name"
+	Line 1 ("=" * ($maxLength + 2 + 15 + 40)) # $maxLength, 2 spaces, "Display Version" plus space, length of Server name
+	#Line 1 "Display Name                                                                      Display Version           PVS Server Name                         "
+	#Line 1 "====================================================================================================================================================="
+	#       123456789012345678901234567890123456789012345678901234567890123456789012345678901SS1234567890123456789012345S1234567890123456789012345678901234567890
+	#       Citrix 7.15 LTSR CU4 - Citrix Delegated Administration Service PowerShell snap-in  11.16.6.0 build 33000     DDC123456789012.123456789012345.local 
+	#       81                                                                                 25                        40
+	
+	$Save = ""
+	$First = $True
+	If($Script:CtxInstalledComponents)
+	{
+		ForEach($Item in $Script:CtxInstalledComponents)
+		{
+			If(!$First -and $Save -ne "$($Item.DisplayName)$($Item.DisplayVersion)")
+			{
+				Line 0 ""
+			}
+
+			Line 1 ( "{0,$NegativeMaxLength} {1,-25} {2,-40}" -f `
+			$Item.DisplayName, $Item.DisplayVersion, $Item.PVSServerName)
+			
+			$Save = "$($Item.DisplayName)$($Item.DisplayVersion)"
+			If($First)
+			{
+				$First = $False
+			}
+		}
+	}
+	Else
+	{
+		Line 1 "<None found>"
+	}
+	Line 0 ""
+
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Finished Creating Appendix R Citrix Installed Components"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
+}
+#endregion
+
 #region save and close document	
 Function SaveandCloseTextDocument
 {
@@ -4647,6 +4812,7 @@ Function GetConfigWizardInfo
 {
 	Param([string]$ComputerName)
 	
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tGather Config Wizard info"
 	$DHCPServicesValue = Get-RegistryValue "HKLM:\SOFTWARE\Citrix\ProvisioningServices\Wizard" "DHCPType" $ComputerName
 	$PXEServiceValue = Get-RegistryValue "HKLM:\SOFTWARE\Citrix\ProvisioningServices\Wizard" "PXEType" $ComputerName
 	
@@ -4726,7 +4892,6 @@ Function GetConfigWizardInfo
 		$TFTPOption = "No"
 	}
 
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Gather Config Wizard info for Appendix C"
 	$obj1 = [PSCustomObject] @{
 		ServerName        = $ComputerName
 		DHCPServicesValue = $DHCPServicesValue
@@ -4753,7 +4918,7 @@ Function GetDisableTaskOffloadInfo
 {
 	Param([string]$ComputerName)
 	
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Gather TaskOffload info for Appendix E"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tGather TaskOffload info"
 	$TaskOffloadValue = Get-RegistryValue "HKLM:\SYSTEM\CurrentControlSet\Services\TCPIP\Parameters" "DisableTaskOffload" $ComputerName
 	
 	If($Null -eq $TaskOffloadValue)
@@ -4840,7 +5005,7 @@ Function GetMiscRegistryKeys
 	#HKLM:\SYSTEM\Currentcontrolset\services\PVSTSB\Parameters         InitTimeoutSec           
 	#HKLM:\SYSTEM\Currentcontrolset\services\PVSTSB\Parameters         MaxBindRetry      
 	
-	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Gather Misc Registry Key data for Appendix K"
+	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tGather Misc Registry Key data"
 
 	#https://docs.citrix.com/en-us/provisioning/7-1/pvs-readme-7/7-fixed-issues.html
 	Get-RegKeyToObject "HKLM:\SOFTWARE\Citrix\ProvisioningServices" "AutoUpdateUserCache" $ComputerName
@@ -5042,8 +5207,8 @@ Function Check-NeededPSSnapins
 	$RegisteredSnapins = @()
 
 	#Creates arrays of strings, rather than objects, we're passing strings so this will be more robust.
-	$loadedSnapins += get-pssnapin | ForEach-Object {$_.name}
-	$registeredSnapins += get-pssnapin -Registered | ForEach-Object {$_.name}
+	$loadedSnapins += Get-PSSnapin | ForEach-Object {$_.name}
+	$registeredSnapins += Get-PSSnapin -Registered | ForEach-Object {$_.name}
 
 	ForEach($Snapin in $Snapins)
 	{
@@ -5066,6 +5231,17 @@ Function Check-NeededPSSnapins
 				#Snapin is registered, but not loaded, loading it now:
 				Write-Host "Loading Windows PowerShell snap-in: $snapin"
 				Add-PSSnapin -Name $snapin -EA 0
+
+				If(!($?))
+				{
+					Write-Error "
+	`n`n
+	Error loading snapin: $($error[0].Exception.Message)
+	`n`n
+	Script cannot continue.
+	`n`n"
+					Return $false
+				}				
 			}
 		}
 	}
@@ -5074,7 +5250,7 @@ Function Check-NeededPSSnapins
 	{
 		Write-Warning "Missing Windows PowerShell snap-ins Detected:"
 		$missingSnapins | ForEach-Object {Write-Warning "($_)"}
-		return $False
+		Return $False
 	}
 	Else
 	{
@@ -5218,7 +5394,7 @@ If($Script:pwdpath -like "*Windows*")
 
 #exit script if $BadDir is true
 If($BadDir)
-{
+{111
 	Write-Host "$(Get-Date): 
 	
 	You are running the script from a standard Windows folder.
@@ -5344,6 +5520,7 @@ $Script:CacheOnServer                = New-Object System.Collections.ArrayList
 $Script:MSHotfixes                   = New-Object System.Collections.ArrayList
 $Script:WinInstalledComponents       = New-Object System.Collections.ArrayList
 $Script:PVSProcessItems              = New-Object System.Collections.ArrayList
+$Script:CtxInstalledComponents       = New-Object System.Collections.ArrayList	
 $script:startTime                    = Get-Date
 
 # v1.17 - switch to using a StringBuilder for $global:Output
@@ -5405,6 +5582,8 @@ OutputAppendixO	#Appendix O - PVS Processes
 OutputAppendixP	#Appendix P - Items to Review
 
 OutputAppendixQ	#Appendix Q - Server Items to Review
+
+OutputAppendixR #Appendix R - Citrix Installed Components
 
 SaveandCloseTextDocument
 
