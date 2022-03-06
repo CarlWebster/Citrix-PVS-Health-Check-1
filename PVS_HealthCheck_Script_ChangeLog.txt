@@ -3,6 +3,22 @@
 #@carlwebster on Twitter
 #http://www.CarlWebster.com
 
+#Version 1.25 6-Mar-2022
+#	Added MultiSubnetFailover to Farm Status section
+#		Thanks to Arnaud Pain
+#		I can't believe no one has asked for this since PVS 7.11 was released on 14-Sep-2016
+#	Fixed a bug in Function GetInstalledRolesAndFeatures that didn't handle the condition of no installed Roles or Features
+#		Thanks to Arnaud Pain for reporting this
+#	Fixed bug when retrieving a Device Collection's Administrators and Operators
+#		I was not comparing to the specific device collection name, which returned all administrators and 
+#		operators for all device collections and not the device collection being processed 
+#	Fixed several incorrect variable names
+#	Format the Farm, Properties, Status section to match the console output
+#	In Function GetConfigWizardInfo, fix $PXEServices to work with PVS7+
+#		If DHCPType is equal to 1073741824, then if PXE is set to PVS,
+#		in PVS V5/6, PXEType is set to 0, but in PVS7, PXEType is set to 1
+#		Updated the function to check for both 0 and 1 values
+
 #Version 1.24 25-Jan-2021
 #	Added Appendix R for Installed Citrix Components
 #		Added array $Script:CtxInstalledComponents

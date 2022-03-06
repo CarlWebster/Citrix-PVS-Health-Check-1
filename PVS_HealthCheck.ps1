@@ -223,9 +223,9 @@
 	CSV files.
 .NOTES
 	NAME: PVS_HealthCheck.ps1
-	VERSION: 1.24
+	VERSION: 1.25
 	AUTHOR: Carl Webster (with much help from BG a, now former, Citrix dev)
-	LASTEDIT: January 25, 2021
+	LASTEDIT: March 5, 2022
 #>
 
 
@@ -285,6 +285,22 @@ Param(
 #released to the community on February 2, 2016
 #
 
+#Version 1.25 6-Mar-2022
+#	Added MultiSubnetFailover to Farm Status section
+#		Thanks to Arnaud Pain
+#		I can't believe no one has asked for this since PVS 7.11 was released on 14-Sep-2016
+#	Fixed a bug in Function GetInstalledRolesAndFeatures that didn't handle the condition of no installed Roles or Features
+#		Thanks to Arnaud Pain for reporting this
+#	Fixed bug when retrieving a Device Collection's Administrators and Operators
+#		I was not comparing to the specific device collection name, which returned all administrators and 
+#		operators for all device collections and not the device collection being processed 
+#	Fixed several incorrect variable names
+#	Format the Farm, Properties, Status section to match the console output
+#	In Function GetConfigWizardInfo, fix $PXEServices to work with PVS7+
+#		If DHCPType is equal to 1073741824, then if PXE is set to PVS,
+#		in PVS V5/6, PXEType is set to 0, but in PVS7, PXEType is set to 1
+#		Updated the function to check for both 0 and 1 values
+#
 #Version 1.24 25-Jan-2021
 #	Added Appendix R for Installed Citrix Components
 #		Added array $Script:CtxInstalledComponents
@@ -1042,7 +1058,7 @@ Function ProcessPVSFarm
 	If($Script:PVSVersion -eq "5")
 	{
 		Line 0 "Use Datacenter licenses for desktops if no Desktop licenses are available: " -nonewline
-		If($farm.licenseTradeUp -eq "1")
+		If($Script:farm.licenseTradeUp -eq "1")
 		{
 			Line 0 "Yes"
 		}
@@ -1055,11 +1071,11 @@ Function ProcessPVSFarm
 	If($Script:PVSFullVersion -ge "7.19")
 	{
 		Line 0 "Citrix Provisioning license type" ""
-		If($farm.LicenseSKU -eq 0)  #fix in 1.21 uint LicenseSKU: LicenseSKU. 0 for on-premises, 1 for cloud. Min=0, Max=1, Default=0
+		If($Script:farm.LicenseSKU -eq 0)  #fix in 1.21 uint LicenseSKU: LicenseSKU. 0 for on-premises, 1 for cloud. Min=0, Max=1, Default=0
 		{
 			Line 1 "On-Premises`t: " "Yes"
 			Line 2 "Use Datacenter licenses for desktops if no Desktop licenses are available: " -nonewline
-			If($farm.licenseTradeUp -eq "1")
+			If($Script:farm.licenseTradeUp -eq "1")
 			{
 				Line 0 "Yes"
 			}
@@ -1069,7 +1085,7 @@ Function ProcessPVSFarm
 			}
 			Line 1 "Cloud`t`t: " "No"
 		}
-		ElseIf($farm.LicenseSKU -eq 1)
+		ElseIf($Script:farm.LicenseSKU -eq 1)
 		{
 			Line 1 "On-Premises`t: " "No"
 			Line 2 "Use Datacenter licenses for desktops if no Desktop licenses are available: No"
@@ -1084,7 +1100,7 @@ Function ProcessPVSFarm
 	{
 		#	Fixed in the 1.23 the missing $DatacenterLicense variable (found by SHurjuk)
 
-		If($farm.licenseTradeUp -eq "1" -or $farm.licenseTradeUp -eq $True)
+		If($Script:farm.licenseTradeUp -eq "1" -or $Script:farm.licenseTradeUp -eq $True)
 		{
 			$DatacenterLicense = "Yes"
 		}
@@ -1096,10 +1112,10 @@ Function ProcessPVSFarm
 	}
 
 	Line 0 "Enable auto-add`t`t`t: " -nonewline
-	If($farm.autoAddEnabled -eq "1")
+	If($Script:farm.autoAddEnabled -eq "1")
 	{
 		Line 0 "Yes"
-		Line 0 "Add new devices to this site`t: " $farm.DefaultSiteName
+		Line 0 "Add new devices to this site`t: " $Script:farm.DefaultSiteName
 		$Script:FarmAutoAddEnabled = $True
 	}
 	Else
@@ -1175,6 +1191,23 @@ Function ProcessPVSFarm
 	}
 	
 	#status tab
+	
+	If($Script:PVSFullVersion -ge "7.11")
+	{
+		If($Script:farm.multiSubnetFailover -eq "1")
+		{
+			$MultiSubnetFailover = "True"
+		}
+		Else
+		{
+			$MultiSubnetFailover = "False"
+		}
+	}
+	Else
+	{
+		$MultiSubnetFailover = "No supported on PVS $($Script:PVSFullVersion)"
+	}
+
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tProcessing Status Tab"
 	Line 0 "Database server`t`t`t: " $Script:farm.databaseServerName
 	Line 0 "Database server IP`t`t: " $SQLServerIPAddress
@@ -1183,6 +1216,7 @@ Function ProcessPVSFarm
 	Line 0 "Failover Partner Server`t`t: " $Script:farm.failoverPartnerServerName
 	Line 0 "Failover Partner Server IP`t: " $FailoverSQLServerIPAddress
 	Line 0 "Failover Partner Instance`t: " $Script:farm.failoverPartnerInstanceName
+	Line 0 "MultiSubnetFailover`t`t: " $MultiSubnetFailover
 	If($Script:farm.adGroupsEnabled -eq "1")
 	{
 		Line 0 "Active Directory groups are used for access rights"
@@ -1243,7 +1277,7 @@ Function ProcessPVSSite
 
 			#options tab
 			Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`tProcessing Options Tab"
-			If($PVSVersion -eq "5" -or (($PVSVersion -eq "6" -or $PVSVersion -eq "7") -and $FarmAutoAddEnabled))
+			If($Script:PVSVersion -eq "5" -or (($Script:PVSVersion -eq "6" -or $Script:PVSVersion -eq "7") -and $FarmAutoAddEnabled))
 			{
 				Line 1 "Add new devices to this collection`t`t: " -nonewline
 				If($PVSSite.DefaultCollectionName)
@@ -1255,9 +1289,9 @@ Function ProcessPVSSite
 					Line 0 "<No Default collection>"
 				}
 			}
-			If($PVSVersion -eq "6" -or $PVSVersion -eq "7")
+			If($Script:PVSVersion -eq "6" -or $Script:PVSVersion -eq "7")
 			{
-				If($PVSVersion -eq "6")
+				If($Script:PVSVersion -eq "6")
 				{
 					Line 1 "Seconds between vDisk inventory scans`t`t: " $PVSSite.inventoryFilePollingInterval
 				}
@@ -1342,10 +1376,6 @@ Function ProcessPVSSite
 						If($Script:PVSVersion -eq "7")
 						{
 							Line 2 "Management IP`t`t`t`t`t: " $Server.managementIp
-							$obj1 = [PSCustomObject] @{
-								ServerName = $Server.serverName							
-								IPAddress  = $Server.managementIp
-							}
 							$Script:NICIPAddresses.Add( $Server.serverName, $Server.managementIp )
 						}
 							
@@ -1445,7 +1475,7 @@ Function ProcessPVSSite
 							{
 								ForEach($AuthGroupUsage in $AuthGroupUsages)
 								{
-									If($AuthGroupUsage.role -eq "300")
+									If($AuthGroupUsage.role -eq "300" -and $AuthGroupUsage.Name -eq $Collection.collectionName)
 									{
 										$DeviceAdmins = $True
 										Line 9 "  " $authgroup.authGroupName
@@ -1474,7 +1504,7 @@ Function ProcessPVSSite
 							{
 								ForEach($AuthGroupUsage in $AuthGroupUsages)
 								{
-									If($AuthGroupUsage.role -eq "400")
+									If($AuthGroupUsage.role -eq "400" -and $AuthGroupUsage.Name -eq $Collection.collectionName)
 									{
 										$DeviceOperators = $True
 										Line 9 "  " $authgroup.authGroupName
@@ -1543,7 +1573,7 @@ Function ProcessPVSSite
 						}
 						Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`t`t`tProcessing General Tab"
 						Line 4 "Name`t`t`t`t`t: " $Device.deviceName
-						If(($PVSVersion -eq "6" -or $PVSVersion -eq "7") -and $Device.type -ne "3")
+						If(($Script:PVSVersion -eq "6" -or $Script:PVSVersion -eq "7") -and $Device.type -ne "3")
 						{
 							Line 4 "Type`t`t`t`t`t: " -nonewline
 							Switch ($Device.type)
@@ -1672,24 +1702,12 @@ Function GetInstalledRolesAndFeatures
 	{
 		#added V1.16 get Windows installed Roles and Features
 		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tRetrieving Windows installed Roles and Features"
-		[bool]$GotWinComponents = $True
-		
 		$results = Get-WindowsFeature -ComputerName $ComputerName -EA 0 4> $Null
 		
-		If(!$?)
+		If($? -and $Null -ne $results)
 		{
-			$GotWinComponents = $False
-		}
+			$WinComponents = $results | Where-Object Installed | Select-Object DisplayName,Name,FeatureType | Sort-Object DisplayName 
 		
-		$WinComponents = $results | Where-Object Installed | Select-Object DisplayName,Name,FeatureType | Sort-Object DisplayName 
-		
-		If($GotWinComponents -eq $False)
-		{
-			Line 1 "No Windows installed Roles and Features were found"
-			Line 0 ""
-		}
-		Else
-		{
 			ForEach($Component in $WinComponents)
 			{
 				$obj1 = [PSCustomObject] @{
@@ -1700,6 +1718,11 @@ Function GetInstalledRolesAndFeatures
 				}
 				$null = $Script:WinInstalledComponents.Add($obj1)
 			}
+		}
+		Else
+		{
+			Line 1 "No Windows installed Roles and Features were found"
+			Line 0 ""
 		}
 	}
 }
@@ -1731,7 +1754,7 @@ Function DeviceStatus
 			3 {Line 0 "Personal vDisk"; Break}
 			Default {Line 0 "vDisk access type could not be determined: $($xDevice.diskVersionAccess)"; Break}
 		}
-		If($PVSVersion -eq "7")
+		If($Script:PVSVersion -eq "7")
 		{
 			Line 3 "Local write cache disk:$($xDevice.localWriteCacheDiskSize)GB"
 			Line 3 "Boot mode:" -nonewline
@@ -4833,7 +4856,8 @@ Function GetConfigWizardInfo
 		Switch ($PXEServiceValue)
 		{
 			1073741824 {$PXEServices = "The service that runs on another computer"; Break}
-			0 {$PXEServices = "Provisioning Services PXE service"; Break}
+			1 {$PXEServices = "Provisioning Services PXE service"; Break} #PVS 7
+			0 {$PXEServices = "Provisioning Services PXE service"; Break} #PVS 5/6
 			Default {$PXEServices = "Unable to determine PXEServices: $($PXEServiceValue)"; Break}
 		}
 	}
