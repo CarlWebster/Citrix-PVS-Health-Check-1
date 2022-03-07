@@ -1194,18 +1194,11 @@ Function ProcessPVSFarm
 	
 	If($Script:PVSFullVersion -ge "7.11")
 	{
-		If($Script:farm.multiSubnetFailover -eq "1")
-		{
-			$MultiSubnetFailover = "True"
-		}
-		Else
-		{
-			$MultiSubnetFailover = "False"
-		}
+		$MultiSubnetFailover = $Script:farm.MultiSubnetFailover
 	}
 	Else
 	{
-		$MultiSubnetFailover = "No supported on PVS $($Script:PVSFullVersion)"
+		$MultiSubnetFailover = "Not supported on PVS $($Script:PVSFullVersion)"
 	}
 
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `tProcessing Status Tab"
