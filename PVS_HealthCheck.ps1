@@ -223,9 +223,9 @@
 	CSV files.
 .NOTES
 	NAME: PVS_HealthCheck.ps1
-	VERSION: 1.25
+	VERSION: 1.26
 	AUTHOR: Carl Webster (with much help from BG a, now former, Citrix dev)
-	LASTEDIT: March 5, 2022
+	LASTEDIT: April 26, 2022
 #>
 
 
@@ -285,6 +285,11 @@ Param(
 #released to the community on February 2, 2016
 #
 
+#Version 1.26 26-Apr-2022
+#	Change all Get-WMIObject to Get-CIMInstance
+#	General code cleanup
+#	In Function OutputNicItem, fixed several issues with DHCP data
+#
 #Version 1.25 6-Mar-2022
 #	Added MultiSubnetFailover to Farm Status section
 #		Thanks to Arnaud Pain
@@ -1964,10 +1969,20 @@ Function GetPVSServiceInfo
 	Param([string]$ComputerName)
 
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): `t`t`t`tProcessing PVS Services for Server $($server.servername)"
-	$Services = Get-WmiObject -ComputerName $ComputerName Win32_Service -EA 0 | `
-	Where-Object {$_.DisplayName -like "Citrix PVS*"} | `
-	Select-Object displayname, name, status, startmode, started, startname, state | `
-	Sort-Object DisplayName
+	If($ComputerName -eq $env:computername)
+	{
+		$Services = Get-CIMInstance Win32_Service -EA 0 | `
+		Where-Object {$_.DisplayName -like "Citrix PVS*"} | `
+		Select-Object displayname, name, status, startmode, started, startname, state | `
+		Sort-Object DisplayName
+	}
+	Else
+	{
+		$Services = Get-CIMInstance -CIMSession $ComputerName Win32_Service -EA 0 | `
+		Where-Object {$_.DisplayName -like "Citrix PVS*"} | `
+		Select-Object displayname, name, status, startmode, started, startname, state | `
+		Sort-Object DisplayName
+	}
 	
 	If($? -and $Null -ne $Services)
 	{
@@ -2351,7 +2366,14 @@ Function GetComputerWMIInfo
 	
 	Try
 	{
-		$Results = Get-WmiObject -computername $RemoteComputerName win32_computersystem
+		If($RemoteComputerName -eq $env:computername)
+		{
+			$Results = Get-CimInstance -ClassName win32_computersystem -Verbose:$False
+		}
+		Else
+		{
+			$Results = Get-CimInstance -computername $RemoteComputerName -ClassName win32_computersystem -Verbose:$False
+		}
 	}
 	
 	Catch
@@ -2365,7 +2387,14 @@ Function GetComputerWMIInfo
 		@{N="TotalPhysicalRam"; E={[math]::round(($_.TotalPhysicalMemory / 1GB),0)}}, `
 		NumberOfProcessors, NumberOfLogicalProcessors
 		$Results = $Null
-		[string]$ComputerOS = (Get-WmiObject -class Win32_OperatingSystem -computername $RemoteComputerName -EA 0).Caption
+		If($RemoteComputerName -eq $env:computername)
+		{
+			[string]$ComputerOS = (Get-CimInstance -ClassName Win32_OperatingSystem -EA 0 -Verbose:$False).Caption
+		}
+		Else
+		{
+			[string]$ComputerOS = (Get-CimInstance -ClassName Win32_OperatingSystem -CimSession $RemoteComputerName -EA 0 -Verbose:$False).Caption
+		}
 
 		ForEach($Item in $ComputerItems)
 		{
@@ -2374,12 +2403,9 @@ Function GetComputerWMIInfo
 	}
 	ElseIf(!$?)
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
-		Write-Warning "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
-		Line 4 "Get-WmiObject win32_computersystem failed for $($RemoteComputerName)"
-		Line 4 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-		Line 4 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-		Line 4 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Get-CimInstance win32_computersystem failed for $($RemoteComputerName)"
+		Write-Warning "Get-CimInstance win32_computersystem failed for $($RemoteComputerName)"
+		Line 4 "Get-CimInstance win32_computersystem failed for $($RemoteComputerName)"
 		Line 4 ""
 	}
 	Else
@@ -2395,7 +2421,14 @@ Function GetComputerWMIInfo
 
 	Try
 	{
-		$Results = Get-WmiObject -computername $RemoteComputerName Win32_LogicalDisk
+		If($RemoteComputerName -eq $env:computername)
+		{
+			$Results = Get-CimInstance -ClassName Win32_LogicalDisk -Verbose:$False
+		}
+		Else
+		{
+			$Results = Get-CimInstance -CimSession $RemoteComputerName -ClassName Win32_LogicalDisk -Verbose:$False
+		}
 	}
 	
 	Catch
@@ -2419,12 +2452,9 @@ Function GetComputerWMIInfo
 	}
 	ElseIf(!$?)
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
-		Write-Warning "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
-		Line 4 "Get-WmiObject Win32_LogicalDisk failed for $($RemoteComputerName)"
-		Line 4 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-		Line 4 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-		Line 4 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Get-CimInstance Win32_LogicalDisk failed for $($RemoteComputerName)"
+		Write-Warning "Get-CimInstance Win32_LogicalDisk failed for $($RemoteComputerName)"
+		Line 4 "Get-CimInstance Win32_LogicalDisk failed for $($RemoteComputerName)"
 	}
 	Else
 	{
@@ -2440,7 +2470,14 @@ Function GetComputerWMIInfo
 
 	Try
 	{
-		$Results = Get-WmiObject -computername $RemoteComputerName win32_Processor
+		If($RemoteComputerName -eq $env:computername)
+		{
+			$Results = Get-CimInstance -ClassName win32_Processor -Verbose:$False
+		}
+		Else
+		{
+			$Results = Get-CimInstance -computername $RemoteComputerName -ClassName win32_Processor -Verbose:$False
+		}
 	}
 	
 	Catch
@@ -2460,12 +2497,9 @@ Function GetComputerWMIInfo
 	}
 	ElseIf(!$?)
 	{
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
-		Write-Warning "Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
-		Line 4 "Get-WmiObject win32_Processor failed for $($RemoteComputerName)"
-		Line 4 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-		Line 4 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-		Line 4 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Get-CimInstance win32_Processor failed for $($RemoteComputerName)"
+		Write-Warning "Get-CimInstance win32_Processor failed for $($RemoteComputerName)"
+		Line 4 "Get-CimInstance win32_Processor failed for $($RemoteComputerName)"
 	}
 	Else
 	{
@@ -2482,7 +2516,14 @@ Function GetComputerWMIInfo
 	
 	Try
 	{
-		$Results = Get-WmiObject -computername $RemoteComputerName win32_networkadapterconfiguration
+		If($RemoteComputerName -eq $env:computername)
+		{
+			$Results = Get-CimInstance -ClassName win32_networkadapterconfiguration -Verbose:$False
+		}
+		Else
+		{
+			$Results = Get-CimInstance -computername $RemoteComputerName -ClassName win32_networkadapterconfiguration -Verbose:$False
+		}
 	}
 	
 	Catch
@@ -2501,7 +2542,7 @@ Function GetComputerWMIInfo
 		} 
 		Else 
 		{ 
-			$GotNics = !($Nics.__PROPERTY_COUNT -eq 0) 
+			$GotNics = $True
 		} 
 	
 		If($GotNics)
@@ -2510,7 +2551,14 @@ Function GetComputerWMIInfo
 			{
 				Try
 				{
-					$ThisNic = Get-WmiObject -computername $RemoteComputerName win32_networkadapter | Where-Object {$_.index -eq $nic.index}
+					If($RemoteComputerName -eq $env:computername)
+					{
+						$ThisNic = Get-CimInstance -ClassName win32_networkadapter -Verbose:$False | Where-Object {$_.index -eq $nic.index}
+					}
+					Else
+					{
+						$ThisNic = Get-CimInstance -computername $RemoteComputerName -ClassName win32_networkadapter -Verbose:$False | Where-Object {$_.index -eq $nic.index}
+					}
 				}
 				
 				Catch 
@@ -2525,13 +2573,9 @@ Function GetComputerWMIInfo
 				ElseIf(!$?)
 				{
 					Write-Warning "$(Get-Date -Format G): Error retrieving NIC information"
-					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-					Write-Warning "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-					Line 4 "Error retrieving NIC information"
-					Line 4 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-					Line 4 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-					Line 4 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-					Line 4 "need to rerun the script with Domain Admin credentials from the trusted Forest."
+					Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Get-CimInstance win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+					Write-Warning "Get-CimInstance win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+					Line 2 "Error retrieving NIC information"
 				}
 				Else
 				{
@@ -2544,13 +2588,9 @@ Function GetComputerWMIInfo
 	ElseIf(!$?)
 	{
 		Write-Warning "$(Get-Date -Format G): Error retrieving NIC configuration information"
-		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-		Write-Warning "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+		Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): Get-CimInstance win32_networkadapterconfiguration failed for $($RemoteComputerName)"
+		Write-Warning "Get-CimInstance win32_networkadapterconfiguration failed for $($RemoteComputerName)"
 		Line 4 "Error retrieving NIC configuration information"
-		Line 4 "Get-WmiObject win32_networkadapterconfiguration failed for $($RemoteComputerName)"
-		Line 4 "On $($RemoteComputerName) you may need to run winmgmt /verifyrepository"
-		Line 4 "and winmgmt /salvagerepository.  If this is a trusted Forest, you may"
-		Line 4 "need to rerun the script with Domain Admin credentials from the trusted Forest."
 	}
 	Else
 	{
@@ -2571,10 +2611,18 @@ Function OutputComputerItem
 	
 	try 
 	{
-
-		$PowerPlan = (Get-WmiObject -ComputerName $RemoteComputerName -Class Win32_PowerPlan -Namespace "root\cimv2\power" |
-			Where-Object {$_.IsActive -eq $true} |
-			Select-Object @{Name = "PowerPlan"; Expression = {$_.ElementName}}).PowerPlan
+		If($RemoteComputerName -eq $env:computername)
+		{
+			$PowerPlan = (Get-CimInstance -ClassName Win32_PowerPlan -Namespace "root\cimv2\power" -Verbose:$False |
+				Where-Object {$_.IsActive -eq $true} |
+				Select-Object @{Name = "PowerPlan"; Expression = {$_.ElementName}}).PowerPlan
+		}
+		Else
+		{
+			$PowerPlan = (Get-CimInstance -CimSession $RemoteComputerName -ClassName Win32_PowerPlan -Namespace "root\cimv2\power" -Verbose:$False |
+				Where-Object {$_.IsActive -eq $true} |
+				Select-Object @{Name = "PowerPlan"; Expression = {$_.ElementName}}).PowerPlan
+		}
 	}
 
 	catch 
@@ -2723,7 +2771,16 @@ Function OutputNicItem
 {
 	Param([object]$Nic, [object]$ThisNic, [string]$RemoteComputerName)
 	
-	$powerMgmt = Get-WmiObject -computername $RemoteComputerName MSPower_DeviceEnable -Namespace root\wmi | Where-Object{$_.InstanceName -match [regex]::Escape($ThisNic.PNPDeviceID)}
+	If($RemoteComputerName -eq $env:computername)
+	{
+		$powerMgmt = Get-CimInstance -ClassName MSPower_DeviceEnable -Namespace "root\wmi" -Verbose:$False |
+			Where-Object{$_.InstanceName -match [regex]::Escape($ThisNic.PNPDeviceID)}
+	}
+	Else
+	{
+		$powerMgmt = Get-CimInstance -CimSession $RemoteComputerName -ClassName MSPower_DeviceEnable -Namespace "root\wmi" -Verbose:$False |
+			Where-Object{$_.InstanceName -match [regex]::Escape($ThisNic.PNPDeviceID)}
+	}
 
 	If($? -and $Null -ne $powerMgmt)
 	{
@@ -2847,6 +2904,20 @@ Function OutputNicItem
 		$xwinsenablelmhostslookup = "No"
 	}
 
+	If($nic.dhcpenabled)
+	{
+		$DHCPLeaseObtainedDate = $nic.dhcpleaseobtained.ToLocalTime()
+		If($nic.DHCPLeaseExpires -lt $nic.DHCPLeaseObtained)
+		{
+			#Could be an Azure DHCP Lease
+			$DHCPLeaseExpiresDate = (Get-Date).AddSeconds([UInt32]::MaxValue).ToLocalTime()
+		}
+		Else
+		{
+			$DHCPLeaseExpiresDate = $nic.DHCPLeaseExpires.ToLocalTime()
+		}
+	}
+		
 	Line 4 "Name`t`t`t`t: " $ThisNic.Name
 	If($ThisNic.Name -ne $nic.description)
 	{
@@ -2882,12 +2953,14 @@ Function OutputNicItem
 	}
 	If($nic.dhcpenabled)
 	{
-		$DHCPLeaseObtainedDate = $nic.ConvertToDateTime($nic.dhcpleaseobtained)
-		$DHCPLeaseExpiresDate = $nic.ConvertToDateTime($nic.dhcpleaseexpires)
-		Line 4 "DHCP Enabled`t`t`t: " $nic.dhcpenabled
+		Line 4 "DHCP Enabled`t`t`t: " $nic.dhcpenabled.ToString()
 		Line 4 "DHCP Lease Obtained`t`t: " $dhcpleaseobtaineddate
 		Line 4 "DHCP Lease Expires`t`t: " $dhcpleaseexpiresdate
 		Line 4 "DHCP Server`t`t`t:" $nic.dhcpserver
+	}
+	Else
+	{
+		Line 4 "DHCP Enabled`t`t`t: " $nic.dhcpenabled.ToString()
 	}
 	If(![String]::IsNullOrEmpty($nic.dnsdomain))
 	{
@@ -5514,7 +5587,7 @@ If($Dev)
 	$Script:DevErrorFile = "$Script:pwdpath\PVSHealthCheckScriptErrors_$(Get-Date -f yyyy-MM-dd_HHmm).txt"
 }
 
-[string]$Script:RunningOS = (Get-WmiObject -class Win32_OperatingSystem -EA 0).Caption
+[string]$Script:RunningOS = (Get-CIMInstance -ClassName Win32_OperatingSystem -EA 0 -Verbose:$False).Caption
 
 $Script:ItemsToReview                = New-Object System.Collections.ArrayList
 $Script:ServerComputerItemsToReview  = New-Object System.Collections.ArrayList
