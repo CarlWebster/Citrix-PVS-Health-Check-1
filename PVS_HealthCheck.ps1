@@ -80,7 +80,7 @@
 	The default port is 25.
 .PARAMETER UseSSL
 	Specifies whether to use SSL for the SmtpServer.
-	THe default is False.
+	The default is False.
 .PARAMETER From
 	Specifies the username for the From email address.
 	If SmtpServer is used, this is a required parameter.
@@ -223,9 +223,9 @@
 	CSV files.
 .NOTES
 	NAME: PVS_HealthCheck.ps1
-	VERSION: 1.26
+	VERSION: 1.27
 	AUTHOR: Carl Webster (with much help from BG a, now former, Citrix dev)
-	LASTEDIT: April 26, 2022
+	LASTEDIT: April 17, 2023
 #>
 
 
@@ -285,6 +285,23 @@ Param(
 #released to the community on February 2, 2016
 #
 
+#Version 1.27 17-Apr-2023
+#	Added new Farm properties introduced in 2303, SetupType and CloudSetupActive
+#		If(SetupType -eq 1 -and CloudSetupActive -eq $True )
+#		{
+#			"Farm is in cloud setup and all PVS servers have updated to cloud mode"
+#		}
+#		ElseIf(SetupType -eq 1 -and CloudSetupActive -eq $False )
+#		{
+#			"Farm is in cloud setup and all PVS servers have not updated to cloud mode"
+#		}
+#		ElseIf(SetupType -eq 0)
+#		{
+#			"Farm is in on-premises mode"
+#		}
+#	In Function OutputSite:
+#		If SetupType is 1 (Cloud), output the Cloud Customer ID and Name in the Licensing section
+#
 #Version 1.26 26-Apr-2022
 #	Change all Get-WMIObject to Get-CIMInstance
 #	General code cleanup
@@ -946,6 +963,19 @@ Function ShowScriptOptions
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 	Write-Host -foregroundcolor Yellow -backgroundcolor Black "VERBOSE: $(Get-Date -Format G): "
 }
+
+Function validObject( [object] $object, [string] $topLevel )
+{
+	#function created 8-jan-2014 by Michael B. Smith
+	If( $object )
+	{
+		If((Get-Member -Name $topLevel -InputObject $object))
+		{
+			Return $True
+		}
+	}
+	Return $False
+}
 #endregion
 
 #region process pvs farm functions
@@ -1089,12 +1119,43 @@ Function ProcessPVSFarm
 				Line 0 "No"
 			}
 			Line 1 "Cloud`t`t: " "No"
+			If(validObject $Script:farm CloudSetupActive) #added in PVS 2303
+			{
+				<#
+					SetupType: Either on-premise or cloud. 0 for on-premise mode, 1 for cloud mode. Min=0, Max=1, Default=0
+					
+					CloudSetupActive: True if farm is in cloud setup and all PVS servers have also been updated to cloud mode.
+					Default=false
+				#>
+				Line 2 "Farm is in on-premises mode"
+			}
 		}
 		ElseIf($Script:farm.LicenseSKU -eq 1)
 		{
 			Line 1 "On-Premises`t: " "No"
 			Line 2 "Use Datacenter licenses for desktops if no Desktop licenses are available: No"
 			Line 1 "Cloud`t`t: " "Yes"
+			If(validObject $Script:farm CloudSetupActive) #added in PVS 2303
+			{
+				<#
+					SetupType: Either on-premise or cloud. 0 for on-premise mode, 1 for cloud mode. Min=0, Max=1, Default=0
+					
+					CloudSetupActive: True if farm is in cloud setup and all PVS servers have also been updated to cloud mode.
+					Default=false
+				#>
+				If($Script:farm.SetupType -eq 1 -and $Script:farm.CloudSetupActive -eq 1 )
+				{
+					Line 2 "Cloud Customer ID`t: " $Script:farm.CustomerId
+					Line 2 "Cloud Customer Name`t: " $Script:farm.CustomerName
+					Line 2 "Farm is in cloud setup and all PVS servers have updated to cloud mode"
+				}
+				ElseIf($Script:farm.SetupType -eq 1 -and $Script:farm.CloudSetupActive -eq 0 )
+				{
+					Line 2 "Cloud Customer ID`t: " $Script:farm.CustomerId
+					Line 2 "Cloud Customer Name`t: " $Script:farm.CustomerName
+					Line 2 "Farm is in cloud setup and all PVS servers have not updated to cloud mode"
+				}
+			}
 		}
 		Else
 		{
@@ -1214,7 +1275,7 @@ Function ProcessPVSFarm
 	Line 0 "Failover Partner Server`t`t: " $Script:farm.failoverPartnerServerName
 	Line 0 "Failover Partner Server IP`t: " $FailoverSQLServerIPAddress
 	Line 0 "Failover Partner Instance`t: " $Script:farm.failoverPartnerInstanceName
-	Line 0 "MultiSubnetFailover`t`t: " $MultiSubnetFailover
+	Line 0 "Multi-subnet Failover`t`t: " $MultiSubnetFailover
 	If($Script:farm.adGroupsEnabled -eq "1")
 	{
 		Line 0 "Active Directory groups are used for access rights"
@@ -3637,16 +3698,7 @@ Function ProcessStores
 			#Run through the servers again and test each one for the path
 			ForEach ($StoreServer in $StoreServers)
 			{
-				#next few lines from Guy Leech
-                [hashtable]$invokeCommandParameters = @{}
-                If( $StoreServer -ne $env:COMPUTERNAME -and $StoreServer -ne "$env:COMPUTERNAME.$env:UserDnsDomain" )
-                {
-                    $invokeCommandParameters.Add( 'ComputerName' , $StoreServer )
-                }
-				If(Invoke-Command @invokeCommandParameters `
-				    -ScriptBlock { Param( [string]$path ) ; `
-				    Test-Path -Path $path -PathType Container -ErrorAction SilentlyContinue } `
-				    -ArgumentList $store.path)
+				If(Test-Path -Path $Store.path -PathType Container -ErrorAction SilentlyContinue)
 				{
 					Line 2 "Default store path: $($Store.path) on server $StoreServer is valid"
 				}
@@ -3664,16 +3716,7 @@ Function ProcessStores
 				{
 					ForEach($WCPath in $WCPaths)
 					{
-						#next few lines from Guy Leech
-						[hashtable]$invokeCommandParameters = @{}
-						If( $StoreServer -ne $env:COMPUTERNAME -and $StoreServer -ne "$env:COMPUTERNAME.$env:UserDnsDomain" )
-						{
-							$invokeCommandParameters.Add( 'ComputerName' , $StoreServer )
-						}
-						If(Invoke-Command @invokeCommandParameters `
-							-ScriptBlock { Param( [string]$path ) ; `
-							Test-Path -Path $path -PathType Container -ErrorAction SilentlyContinue } `
-							-ArgumentList $WCPath)
+						If(Test-Path -Path $WCPath -PathType Container -ErrorAction SilentlyContinue )
 						{
 							Line 3 "Write Cache Path $($WCPath) on server $StoreServer is valid" 
 						}
