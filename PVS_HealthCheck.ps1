@@ -223,9 +223,9 @@
 	CSV files.
 .NOTES
 	NAME: PVS_HealthCheck.ps1
-	VERSION: 1.27
+	VERSION: 1.28
 	AUTHOR: Carl Webster (with much help from BG a, now former, Citrix dev)
-	LASTEDIT: April 17, 2023
+	LASTEDIT: July 14, 2023
 #>
 
 
@@ -285,6 +285,11 @@ Param(
 #released to the community on February 2, 2016
 #
 
+#Version 1.28 14-Jul-2023
+#	Added the following regkeys from https://support.citrix.com/article/CTX133877/timeout-error-4002-in-provisioning-server-console-after-clicking-show-connected-devices 
+#		HKLM:\software\citrix\provisioningServices\Manager\RelayedRequestReplyTimeoutMilliseconds    
+#		HKLM:\software\citrix\provisioningServices\Manager\RelayedRequestTryTimes
+#	
 #Version 1.27 17-Apr-2023
 #	Added new Farm properties introduced in 2303, SetupType and CloudSetupActive
 #		If(SetupType -eq 1 -and CloudSetupActive -eq $True )
@@ -5105,7 +5110,7 @@ Function GetMiscRegistryKeys
 	#look for the following registry keys and values on PVS servers
 		
 	#Registry Key                                                      Registry Value                 
-	#=================================================================================================
+	#========================================================================================================
 	#HKLM:\SOFTWARE\Citrix\ProvisioningServices                        AutoUpdateUserCache            
 	#HKLM:\SOFTWARE\Citrix\ProvisioningServices                        LoggingLevel 
 	#HKLM:\SOFTWARE\Citrix\ProvisioningServices                        SkipBootMenu                   
@@ -5115,6 +5120,8 @@ Function GetMiscRegistryKeys
 	#HKLM:\SOFTWARE\Citrix\ProvisioningServices\IPC                    PortBase 
 	#HKLM:\SOFTWARE\Citrix\ProvisioningServices\IPC                    PortCount 
 	#HKLM:\SOFTWARE\Citrix\ProvisioningServices\Manager                GeneralInetAddr                
+	#HKLM:\SOFTWARE\Citrix\ProvisioningServices\Manager                RelayedRequestReplyTimeoutMilliseconds
+	#HKLM:\SOFTWARE\Citrix\ProvisioningServices\Manager                RelayedRequestTryTimes
 	#HKLM:\SOFTWARE\Citrix\ProvisioningServices\MgmtDaemon             IPCTraceFile 
 	#HKLM:\SOFTWARE\Citrix\ProvisioningServices\MgmtDaemon             IPCTraceState 
 	#HKLM:\SOFTWARE\Citrix\ProvisioningServices\MgmtDaemon             PortOffset 
@@ -5157,6 +5164,10 @@ Function GetMiscRegistryKeys
 
 	#https://support.citrix.com/article/CTX200196
 	Get-RegKeyToObject "HKLM:\SOFTWARE\Citrix\ProvisioningServices\Manager" "UseTemplateBootOrder" $ComputerName
+
+	#https://support.citrix.com/article/CTX133877/timeout-error-4002-in-provisioning-server-console-after-clicking-show-connected-devices
+	Get-RegKeyToObject "HKLM:\SOFTWARE\Citrix\ProvisioningServices\Manager" "RelayedRequestReplyTimeoutMilliseconds" $ComputerName
+	Get-RegKeyToObject "HKLM:\SOFTWARE\Citrix\ProvisioningServices\Manager" "RelayedRequestTryTimes" $ComputerName
 
 	#https://support.citrix.com/article/CTX135299
 	Get-RegKeyToObject "HKLM:\SOFTWARE\Citrix\ProvisioningServices\StreamProcess" "UseTemplateBootOrder" $ComputerName
